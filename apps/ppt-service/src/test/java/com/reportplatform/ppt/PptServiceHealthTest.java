@@ -2,6 +2,7 @@ package com.reportplatform.ppt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -14,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -29,6 +31,7 @@ class PptServiceHealthTest {
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("app.storage.root", storageRoot::toString);
         registry.add("app.libre-office.executable", () -> Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        registry.add("app.internal-api-key", () -> "test-key");
     }
 
     @Test
@@ -48,5 +51,12 @@ class PptServiceHealthTest {
         assertThat(storageRoot.resolve("generated")).isDirectory();
         assertThat(storageRoot.resolve("temp")).isDirectory();
     }
-}
 
+    @Test
+    void rejectsPptRequestsWithoutInternalApiKey() throws Exception {
+        mockMvc.perform(post("/ppt/parse")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fileId\":\"file-1\",\"relativePath\":\"templates/a.pptx\",\"sha256\":\"" + "0".repeat(64) + "\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+}

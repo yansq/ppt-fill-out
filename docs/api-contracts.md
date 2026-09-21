@@ -88,7 +88,9 @@ Java 进程存活即可成功。
 
 ### `POST /ppt/render`
 
-请求包含输入文件引用、输出格式 `PNG|PDF`、可选页码范围和 idempotencyKey。响应返回生成文件的相对路径、MIME、大小、SHA-256、页数和 warnings。
+P2 页缩略图请求包含 `fileId`、`templateId`、模板相对路径、SHA-256、`outputFormat: PNG` 和 `idempotencyKey`。响应包含 `pageCount`、`files[]` 和 `warnings[]`；每个文件记录 `slideIndex`、相对路径、MIME、大小和 SHA-256。P6 再扩展 PDF、页码范围和最终报告预览。
+
+Web 保存每个 PNG 为 `StoredFile(PREVIEW)` 并关联 `TemplateSlide.previewFileId`。渲染输出位于 `previews/{templateId}/slide-{n}.png`，PPT Service 必须通过临时目录转换并在失败时清理已移动文件。
 
 ### `POST /ppt/generate`
 
@@ -130,4 +132,3 @@ interface MetricDataSource {
 ```
 
 Adapter 输出统一值类型和来源版本，不向领域层泄漏供应商 SQL 类型或连接对象。
-

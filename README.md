@@ -2,7 +2,7 @@
 
 基于固定 `.pptx` 模板，通过结构化指标、人工填报、字段绑定、AI 文本辅助与 Apache POI，稳定生成尽量保持模板格式不变的报告。
 
-当前已完成 **P1 Monorepo 工程初始化**。在 P2 模板解析端到端切片验证通过前，不扩展任务分发、审核等后续功能。
+当前已完成 **P2 模板解析 Vertical Slice**，下一阶段是 **P3 任务与页面分发**。P2 已打通模板上传、真实 PPTX 解析、页缩略图、持久化、失败重试与审计链路。
 
 ## 文档导航
 
@@ -42,15 +42,20 @@ docs/
 
 ```bash
 cp .env.example .env
+# 编辑 .env 后，将变量载入当前 shell；Next.js 从 apps/web 启动，不会自动读取仓库根目录的 .env。
+set -a
+source .env
+set +a
 pnpm install
-DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm db:generate
-DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm --filter @report-platform/database migrate:deploy
+pnpm db:generate
+pnpm --filter @report-platform/database migrate:deploy
 pnpm dev
 ```
 
 另一个终端启动 PPT Service：
 
 ```bash
+set -a; source .env; set +a
 STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 ```
 
@@ -59,6 +64,9 @@ STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 - Web：`http://localhost:3000`
 - Web liveness：`GET /api/health/live`
 - Web readiness：`GET /api/health/ready`，关键配置或系统 MySQL 不可用时返回 503
+- 模板管理：`GET /templates`，非生产环境需配置 `P2_DEVELOPMENT_ACTOR_EMAIL`
+
+P2 尚未接入 Auth.js。容器端到端验证可临时设置 `P2_ALLOW_INSECURE_ACTOR=true`；共享或生产环境必须保持 `false`，此时模板接口返回 501，等待 P3 接入真实身份与资源授权。
 - PPT liveness：`GET http://localhost:8080/actuator/health/liveness`
 - PPT readiness：`GET http://localhost:8080/actuator/health/readiness`
 

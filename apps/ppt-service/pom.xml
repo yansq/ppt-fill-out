@@ -20,6 +20,7 @@
     <properties>
         <java.version>17</java.version>
         <apache-poi.version>5.4.1</apache-poi.version>
+        <pdfbox.version>3.0.3</pdfbox.version>
     </properties>
 
     <dependencies>
@@ -39,6 +40,17 @@
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>${apache-poi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -61,4 +73,3 @@
         </plugins>
     </build>
 </project>
-

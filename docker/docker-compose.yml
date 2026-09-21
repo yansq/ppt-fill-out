@@ -8,6 +8,7 @@ services:
     environment:
       JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
       LIBREOFFICE_EXECUTABLE: ${LIBREOFFICE_EXECUTABLE:-soffice}
+      PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY}
       STORAGE_ROOT: /data
     volumes:
       - report-data:/data
@@ -33,6 +34,8 @@ services:
       ENCRYPTION_KEY_VERSION: ${ENCRYPTION_KEY_VERSION:-v1}
       PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY}
       PPT_SERVICE_URL: http://ppt-service:8080
+      P2_ALLOW_INSECURE_ACTOR: ${P2_ALLOW_INSECURE_ACTOR:-false}
+      P2_DEVELOPMENT_ACTOR_EMAIL: ${P2_DEVELOPMENT_ACTOR_EMAIL:-collector@local.test}
       STORAGE_ROOT: /data
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -44,7 +47,7 @@ services:
       ppt-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health/ready"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 12

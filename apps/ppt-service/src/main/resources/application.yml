@@ -7,6 +7,7 @@ server:
   shutdown: graceful
 
 app:
+  internal-api-key: ${PPT_SERVICE_API_KEY}
   storage:
     root: ${STORAGE_ROOT:/data}
   libre-office:
@@ -32,4 +33,3 @@ management:
       enabled: true
     readinessstate:
       enabled: true
-
