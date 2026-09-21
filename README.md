@@ -2,7 +2,7 @@
 
 基于固定 `.pptx` 模板，通过结构化指标、人工填报、字段绑定、AI 文本辅助与 Apache POI，稳定生成尽量保持模板格式不变的报告。
 
-当前仓库处于 **设计与工程基线阶段**。在首个端到端切片验证通过前，不扩展任务分发、审核等后续功能。
+当前已完成 **P1 Monorepo 工程初始化**。在 P2 模板解析端到端切片验证通过前，不扩展任务分发、审核等后续功能。
 
 ## 文档导航
 
@@ -16,10 +16,75 @@
 
 ## 目标技术栈
 
-- Web：Next.js、TypeScript、Tailwind CSS、Radix UI、shadcn/ui、TanStack Table、Auth.js、Zod、Vercel AI SDK
+- Web：Next.js、TypeScript、Tailwind CSS、Radix UI、shadcn/ui、@shadcn/lint、TanStack Table、Auth.js、Zod、Vercel AI SDK
 - 系统数据：MySQL、Prisma ORM
 - PPT 服务：Java 17、Spring Boot、Apache POI、LibreOffice Headless
 - 部署：Docker Compose；`report-web` 与 `ppt-service` 共享 `/data` Volume；MySQL 可位于宿主机、外部服务器或其他容器
+
+## 仓库结构
+
+```text
+apps/
+  web/          Next.js 16 Web 与健康检查
+  ppt-service/  Spring Boot 3 / Java 17 / Apache POI / LibreOffice
+packages/
+  database/     Prisma schema、初始 migration 与 Prisma Client
+  shared/       跨前端包共享类型
+  ui/           Radix/shadcn 风格的共享 UI 组件
+docker/
+  docker-compose.yml
+docs/
+```
+
+## 本地开发
+
+要求：Node.js 20.19+、pnpm 10+、Java 17、Maven 3.9+、MySQL 8 兼容数据库，以及用于真实渲染的 LibreOffice。
+
+```bash
+cp .env.example .env
+pnpm install
+DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm db:generate
+DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm --filter @report-platform/database migrate:deploy
+pnpm dev
+```
+
+另一个终端启动 PPT Service：
+
+```bash
+STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
+```
+
+本地端点：
+
+- Web：`http://localhost:3000`
+- Web liveness：`GET /api/health/live`
+- Web readiness：`GET /api/health/ready`，关键配置或系统 MySQL 不可用时返回 503
+- PPT liveness：`GET http://localhost:8080/actuator/health/liveness`
+- PPT readiness：`GET http://localhost:8080/actuator/health/readiness`
+
+## Docker Compose
+
+默认 Compose 只包含 `report-web` 与 `ppt-service`，不会启动 MySQL。先将 `.env.example` 复制为 `.env` 并替换全部密钥及数据库连接：
+
+```bash
+cp .env.example .env
+docker compose --env-file .env -f docker/docker-compose.yml config
+docker compose --env-file .env -f docker/docker-compose.yml up --build
+```
+
+macOS/Windows 容器连接宿主机 MySQL 时使用 `host.docker.internal`。Compose 已为 Linux 配置 `host-gateway` 映射；独立数据库服务器则直接填写其可路由地址。两个服务共享命名 Volume `report-data:/data`，Web 只暴露 3000 端口，PPT Service 仅在内部网络可见。
+
+## 校验命令
+
+```bash
+pnpm lint
+DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm typecheck
+pnpm test
+DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm build
+mvn -f apps/ppt-service/pom.xml clean package
+DATABASE_URL='mysql://user:password@127.0.0.1:3306/report_platform' pnpm db:validate
+docker compose --env-file .env -f docker/docker-compose.yml config --quiet
+```
 
 ## 交付纪律
 
@@ -29,4 +94,3 @@
 2. 完成 TypeScript 类型检查、Next.js 构建和 Java 编译。
 3. 更新本 README 中可运行说明（进入实现阶段后）。
 4. 更新 [docs/progress.md](docs/progress.md)，记录证据、遗留问题和下一阶段入口条件。
-

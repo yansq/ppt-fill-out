@@ -1,0 +1,11 @@
+.git
+.env
+.next
+**/.next
+**/node_modules
+**/target
+coverage
+data
+*.log
+.DS_Store
+

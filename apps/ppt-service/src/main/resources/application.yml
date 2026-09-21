@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: ppt-service
+
+server:
+  port: 8080
+  shutdown: graceful
+
+app:
+  storage:
+    root: ${STORAGE_ROOT:/data}
+  libre-office:
+    executable: ${LIBREOFFICE_EXECUTABLE:soffice}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,storage,libreOffice
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+

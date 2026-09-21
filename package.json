@@ -1,0 +1,27 @@
+{
+  "name": "report-platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=20.19.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @report-platform/database generate && pnpm --parallel --filter @report-platform/web dev",
+    "build": "pnpm --filter @report-platform/database generate && pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm --filter @report-platform/database generate && pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test && mvn -f apps/ppt-service/pom.xml test",
+    "test:web": "pnpm --filter @report-platform/web test",
+    "test:ppt": "mvn -f apps/ppt-service/pom.xml test",
+    "build:ppt": "mvn -f apps/ppt-service/pom.xml clean package",
+    "db:generate": "pnpm --filter @report-platform/database generate",
+    "db:validate": "pnpm --filter @report-platform/database validate",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:ppt && pnpm db:validate"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}
+

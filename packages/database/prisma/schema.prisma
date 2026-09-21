@@ -1,0 +1,525 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TemplateStatus {
+  UPLOADING
+  PARSING
+  READY
+  PARSE_FAILED
+  ARCHIVED
+}
+
+enum ReportTaskStatus {
+  DRAFT
+  FILLING
+  REVIEWING
+  COMPLETED
+  EXPORTED
+}
+
+enum FillInstanceStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  RETURNED
+  REVIEWED
+}
+
+enum ValueSourceType {
+  DATABASE_METRIC
+  MANUAL_TEXT
+  AI_GENERATED
+  EXPRESSION
+  API
+}
+
+enum FinalResolutionType {
+  SELECTED_SUBMISSION
+  MANUAL
+}
+
+enum DataSourceType {
+  MYSQL
+  OCEANBASE
+  ORACLE
+  SQL_SERVER
+  REST_API
+}
+
+enum DataSourceStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum MetricValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  DATE
+  JSON
+}
+
+enum FileCategory {
+  TEMPLATE
+  PREVIEW
+  GENERATED
+  TEMP
+}
+
+enum GeneratedFileType {
+  PPTX
+  PDF
+  PNG
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                    String               @id @default(cuid())
+  email                 String               @unique @db.VarChar(191)
+  name                  String?              @db.VarChar(191)
+  emailVerified         DateTime?
+  image                 String?              @db.Text
+  status                UserStatus           @default(ACTIVE)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  accounts              Account[]
+  sessions              Session[]
+  roles                 UserRole[]
+  templatesCreated      ReportTemplate[]     @relation("TemplateCreator")
+  collectedTasks        ReportTask[]         @relation("TaskCollector")
+  assignmentsReceived   SlideAssignment[]    @relation("AssignmentAssignee")
+  assignmentsCreated    SlideAssignment[]    @relation("AssignmentCreator")
+  fillInstances         FillInstance[]       @relation("FillInstanceAssignee")
+  bindingsUpdated       PlaceholderBinding[] @relation("BindingUpdater")
+  submittedValues       SubmittedValue[]     @relation("SubmittedBy")
+  finalValues           FinalValue[]         @relation("FinalDecider")
+  dataSourcesCreated    DataSource[]          @relation("DataSourceCreator")
+  metricHistoryEntries  MetricValueHistory[] @relation("MetricHistoryOperator")
+  filesCreated          StoredFile[]          @relation("FileCreator")
+  generatedFilesCreated GeneratedFile[]       @relation("GeneratedFileCreator")
+  aiGenerations         AiGeneration[]        @relation("AiCreator")
+  operationLogs         OperationLog[]        @relation("OperationActor")
+}
+
+model Role {
+  id        String     @id @default(cuid())
+  code      String     @unique @db.VarChar(64)
+  name      String     @db.VarChar(191)
+  createdAt DateTime   @default(now())
+  users     UserRole[]
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  @db.VarChar(64)
+  provider          String  @db.VarChar(191)
+  providerAccountId String  @db.VarChar(191)
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String? @db.VarChar(64)
+  scope             String? @db.Text
+  id_token          String? @db.Text
+  session_state     String? @db.VarChar(191)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @db.VarChar(191)
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String @db.VarChar(191)
+  token      String @unique @db.VarChar(191)
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model ReportTemplate {
+  id            String          @id @default(cuid())
+  name          String          @db.VarChar(191)
+  version       Int
+  status        TemplateStatus  @default(UPLOADING)
+  sourceFileId  String          @unique
+  sha256        String          @db.Char(64)
+  parserVersion String?         @db.VarChar(64)
+  createdById   String
+  createdAt     DateTime        @default(now())
+  sourceFile    StoredFile      @relation("TemplateSourceFile", fields: [sourceFileId], references: [id], onDelete: Restrict)
+  createdBy     User            @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  slides        TemplateSlide[]
+  tasks         ReportTask[]
+
+  @@unique([name, version])
+  @@index([createdById, status])
+  @@index([sha256])
+}
+
+model TemplateSlide {
+  id              String                @id @default(cuid())
+  templateId      String
+  slideIndex      Int
+  widthEmu        BigInt
+  heightEmu       BigInt
+  previewFileId   String?               @unique
+  metadataJson    Json?
+  template        ReportTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  previewFile     StoredFile?           @relation("SlidePreviewFile", fields: [previewFileId], references: [id], onDelete: SetNull)
+  placeholders    TemplatePlaceholder[]
+  assignments     SlideAssignment[]
+  fillInstances   FillInstance[]
+
+  @@unique([templateId, slideIndex])
+}
+
+model TemplatePlaceholder {
+  id               String               @id @default(cuid())
+  slideId          String
+  key              String               @db.VarChar(191)
+  occurrenceIndex  Int
+  shapeId          Int
+  shapeName        String?              @db.VarChar(191)
+  shapeType        String               @db.VarChar(64)
+  containerType    String               @db.VarChar(64)
+  paragraphIndex   Int?
+  startRunIndex    Int?
+  startOffset      Int?
+  endRunIndex      Int?
+  endOffset        Int?
+  tableRow         Int?
+  tableColumn      Int?
+  xEmu             BigInt
+  yEmu             BigInt
+  widthEmu         BigInt
+  heightEmu        BigInt
+  originalText     String               @db.Text
+  styleJson        Json?
+  slide            TemplateSlide        @relation(fields: [slideId], references: [id], onDelete: Restrict)
+  bindings         PlaceholderBinding[]
+  submittedValues  SubmittedValue[]
+  finalValues      FinalValue[]
+  aiGenerations    AiGeneration[]
+
+  @@unique([slideId, key, occurrenceIndex])
+  @@index([slideId, shapeId])
+  @@index([key])
+}
+
+model ReportTask {
+  id             String           @id @default(cuid())
+  name           String           @db.VarChar(191)
+  templateId     String
+  reportPeriod   String           @db.Char(7)
+  status         ReportTaskStatus @default(DRAFT)
+  collectorId    String
+  version        Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  template       ReportTemplate   @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  collector      User             @relation("TaskCollector", fields: [collectorId], references: [id], onDelete: Restrict)
+  assignments    SlideAssignment[]
+  fillInstances  FillInstance[]
+  finalValues    FinalValue[]
+  generatedFiles GeneratedFile[]
+  aiGenerations  AiGeneration[]
+  operationLogs  OperationLog[]
+
+  @@index([collectorId, status])
+  @@index([reportPeriod])
+  @@index([templateId])
+}
+
+model SlideAssignment {
+  id              String        @id @default(cuid())
+  taskId          String
+  templateSlideId String
+  assigneeId      String
+  createdById     String
+  createdAt       DateTime      @default(now())
+  task            ReportTask    @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  templateSlide   TemplateSlide @relation(fields: [templateSlideId], references: [id], onDelete: Restrict)
+  assignee        User          @relation("AssignmentAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  createdBy       User          @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  fillInstance    FillInstance?
+
+  @@unique([taskId, templateSlideId, assigneeId])
+  @@index([assigneeId])
+}
+
+model FillInstance {
+  id              String             @id @default(cuid())
+  assignmentId    String             @unique
+  taskId          String
+  templateSlideId String
+  assigneeId      String
+  status          FillInstanceStatus @default(NOT_STARTED)
+  version         Int                @default(0)
+  submittedAt     DateTime?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  assignment      SlideAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  task            ReportTask         @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  templateSlide   TemplateSlide      @relation(fields: [templateSlideId], references: [id], onDelete: Restrict)
+  assignee        User               @relation("FillInstanceAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  bindings        PlaceholderBinding[]
+  submittedValues SubmittedValue[]
+
+  @@index([assigneeId, status])
+  @@index([taskId, status])
+  @@index([templateSlideId])
+}
+
+model PlaceholderBinding {
+  id                 String              @id @default(cuid())
+  fillInstanceId     String
+  placeholderId      String
+  sourceType         ValueSourceType
+  metricDefinitionId String?
+  metricPeriod       String?             @db.Char(7)
+  manualValue        String?             @db.Text
+  aiGenerationId     String?
+  formatOptionsJson  Json?
+  version            Int                 @default(0)
+  updatedById        String
+  updatedAt          DateTime            @updatedAt
+  fillInstance       FillInstance        @relation(fields: [fillInstanceId], references: [id], onDelete: Restrict)
+  placeholder        TemplatePlaceholder @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
+  metricDefinition   MetricDefinition?   @relation(fields: [metricDefinitionId], references: [id], onDelete: Restrict)
+  aiGeneration       AiGeneration?       @relation(fields: [aiGenerationId], references: [id], onDelete: Restrict)
+  updatedBy          User                @relation("BindingUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@unique([fillInstanceId, placeholderId])
+  @@index([metricDefinitionId])
+}
+
+model SubmittedValue {
+  id                  String              @id @default(cuid())
+  fillInstanceId      String
+  placeholderId       String
+  valueText           String              @db.LongText
+  sourceType          ValueSourceType
+  sourceSnapshotJson  Json?
+  bindingSnapshotJson Json
+  submittedById       String
+  submittedAt         DateTime            @default(now())
+  submissionRevision  Int
+  fillInstance        FillInstance        @relation(fields: [fillInstanceId], references: [id], onDelete: Restrict)
+  placeholder         TemplatePlaceholder @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
+  submittedBy         User                @relation("SubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  selectedByFinal     FinalValue[]         @relation("SelectedSubmission")
+
+  @@unique([fillInstanceId, placeholderId, submissionRevision])
+  @@index([placeholderId, submittedAt])
+}
+
+model FinalValue {
+  id                       String                @id @default(cuid())
+  taskId                   String
+  placeholderId            String
+  valueText                String                @db.LongText
+  resolutionType           FinalResolutionType
+  selectedSubmittedValueId String?
+  sourceSnapshotJson       Json?
+  version                  Int                   @default(0)
+  decidedById              String
+  decidedAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  task                     ReportTask            @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  placeholder              TemplatePlaceholder   @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
+  selectedSubmittedValue   SubmittedValue?       @relation("SelectedSubmission", fields: [selectedSubmittedValueId], references: [id], onDelete: Restrict)
+  decidedBy                User                  @relation("FinalDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@unique([taskId, placeholderId])
+  @@index([selectedSubmittedValueId])
+}
+
+model DataSource {
+  id                   String           @id @default(cuid())
+  name                 String           @unique @db.VarChar(191)
+  type                 DataSourceType
+  status               DataSourceStatus @default(ACTIVE)
+  host                 String?          @db.VarChar(255)
+  port                 Int?
+  databaseName         String?          @db.VarChar(191)
+  username             String?          @db.VarChar(191)
+  encryptedPassword    String?          @db.Text
+  encryptionKeyVersion String?          @db.VarChar(64)
+  optionsJson          Json?
+  createdById          String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  createdBy            User             @relation("DataSourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  metricDefinitions    MetricDefinition[]
+}
+
+model MetricDefinition {
+  id               String               @id @default(cuid())
+  dataSourceId     String
+  code             String               @db.VarChar(191)
+  name             String               @db.VarChar(191)
+  description      String?              @db.Text
+  valueType        MetricValueType
+  unit             String?              @db.VarChar(64)
+  writable         Boolean              @default(false)
+  queryConfigJson  Json
+  updateConfigJson Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  dataSource       DataSource           @relation(fields: [dataSourceId], references: [id], onDelete: Restrict)
+  values           MetricValue[]
+  bindings         PlaceholderBinding[]
+
+  @@unique([dataSourceId, code])
+  @@index([name])
+}
+
+model MetricValue {
+  id                 String               @id @default(cuid())
+  metricDefinitionId String
+  period             String               @db.Char(7)
+  dimensionsHash     String               @db.Char(64)
+  dimensionsJson     Json?
+  valueText          String               @db.LongText
+  valueNumber        Decimal?             @db.Decimal(65, 18)
+  sourceVersion      String?              @db.VarChar(191)
+  sourceUpdatedAt    DateTime?
+  version            Int                  @default(0)
+  fetchedAt          DateTime             @default(now())
+  metricDefinition   MetricDefinition     @relation(fields: [metricDefinitionId], references: [id], onDelete: Restrict)
+  history            MetricValueHistory[]
+
+  @@unique([metricDefinitionId, period, dimensionsHash])
+  @@index([period])
+}
+
+model MetricValueHistory {
+  id              String      @id @default(cuid())
+  metricValueId   String
+  oldValueJson    Json
+  newValueJson    Json
+  reason          String      @db.Text
+  operatorId      String
+  expectedVersion Int
+  createdAt       DateTime    @default(now())
+  metricValue     MetricValue @relation(fields: [metricValueId], references: [id], onDelete: Restrict)
+  operator        User        @relation("MetricHistoryOperator", fields: [operatorId], references: [id], onDelete: Restrict)
+
+  @@index([metricValueId, createdAt])
+}
+
+model StoredFile {
+  id                String           @id @default(cuid())
+  category          FileCategory
+  storagePath       String           @unique @db.VarChar(768)
+  originalFilename  String           @db.VarChar(255)
+  mimeType          String           @db.VarChar(191)
+  sizeBytes         BigInt
+  sha256            String           @db.Char(64)
+  createdById       String
+  createdAt         DateTime         @default(now())
+  createdBy         User             @relation("FileCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  sourceForTemplate ReportTemplate?  @relation("TemplateSourceFile")
+  previewForSlide   TemplateSlide?   @relation("SlidePreviewFile")
+  generatedRecord   GeneratedFile?   @relation("GeneratedStoredFile")
+
+  @@index([sha256, category])
+}
+
+model GeneratedFile {
+  id                 String           @id @default(cuid())
+  taskId             String
+  type               GeneratedFileType
+  status             GenerationStatus @default(PENDING)
+  storedFileId       String?          @unique
+  valuesSnapshotJson Json
+  idempotencyKey     String           @unique @db.VarChar(191)
+  errorCode          String?          @db.VarChar(64)
+  createdById        String
+  createdAt          DateTime         @default(now())
+  completedAt        DateTime?
+  task               ReportTask       @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  storedFile         StoredFile?       @relation("GeneratedStoredFile", fields: [storedFileId], references: [id], onDelete: Restrict)
+  createdBy          User              @relation("GeneratedFileCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([taskId, status])
+}
+
+model AiGeneration {
+  id                String                @id @default(cuid())
+  taskId            String
+  placeholderId     String?
+  promptTemplateKey String                @db.VarChar(191)
+  inputSnapshotJson Json
+  provider          String                @db.VarChar(191)
+  model             String                @db.VarChar(191)
+  outputText        String                @db.LongText
+  acceptedText      String?               @db.LongText
+  createdById       String
+  createdAt         DateTime              @default(now())
+  task              ReportTask            @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  placeholder       TemplatePlaceholder?  @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
+  createdBy         User                  @relation("AiCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  bindings          PlaceholderBinding[]
+
+  @@index([taskId, createdAt])
+}
+
+model OperationLog {
+  id            String      @id @default(cuid())
+  actorId       String
+  action        String      @db.VarChar(64)
+  resourceType  String      @db.VarChar(64)
+  resourceId    String      @db.VarChar(191)
+  taskId        String?
+  beforeJson    Json?
+  afterJson     Json?
+  metadataJson  Json?
+  correlationId String      @db.VarChar(191)
+  createdAt     DateTime    @default(now())
+  actor         User        @relation("OperationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  task          ReportTask? @relation(fields: [taskId], references: [id], onDelete: Restrict)
+
+  @@index([resourceType, resourceId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([correlationId])
+}

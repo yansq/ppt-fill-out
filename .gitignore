@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+.pnpm-store/
+.next/
+dist/
+coverage/
+target/
+*.tsbuildinfo
+
+# Generated Prisma client artifacts
+packages/database/node_modules/
+
+# Environment and local state
+.env
+.env.local
+.env.*.local
+!.env.example
+*.log
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Runtime data: keep directory layout only
+data/*
+!data/.gitkeep

@@ -1,0 +1,56 @@
+name: report-platform
+
+services:
+  ppt-service:
+    build:
+      context: ../apps/ppt-service
+      dockerfile: Dockerfile
+    environment:
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+      LIBREOFFICE_EXECUTABLE: ${LIBREOFFICE_EXECUTABLE:-soffice}
+      STORAGE_ROOT: /data
+    volumes:
+      - report-data:/data
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  report-web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      DATABASE_URL: ${DATABASE_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ENCRYPTION_KEY_VERSION: ${ENCRYPTION_KEY_VERSION:-v1}
+      PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY}
+      PPT_SERVICE_URL: http://ppt-service:8080
+      STORAGE_ROOT: /data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - report-data:/data
+    ports:
+      - "3000:3000"
+    depends_on:
+      ppt-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  report-data:
+    name: report-data

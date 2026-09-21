@@ -10,16 +10,16 @@
 
 ## 2. 阶段总览
 
-| 阶段 | 目标 | 入口条件 | 主要交付物 |
-|---|---|---|---|
-| P0 | 设计与工程基线 | 原始需求已提供 | 本文档集、决策记录、进度台账 |
-| P1 | Monorepo 可启动 | P0 评审通过 | Web/PPT Service/Prisma/Compose/Volume/health |
-| P2 | 模板解析 Vertical Slice | P1 构建通过 | 上传、存储、POI 解析、持久化、页/占位符列表 |
-| P3 | 任务与页面分发 | P2 真实 PPTX 验证通过 | ReportTask、分配、FillInstance、进度 |
-| P4 | 指标与填报 | P3 权限测试通过 | MySQL Adapter、绑定、人工值、Fast Preview、提交 |
-| P5 | 审核与 FinalValue | P4 提交流程通过 | 多人结果、冲突解决、退回、乐观锁 |
-| P6 | 生成与真实预览 | P5 FinalValue 完整 | POI 生成、LibreOffice PNG/PDF、下载、溢出告警 |
-| P7 | AI、加固与交付 | 主链路通过 | AI 候选、审计补齐、安全/恢复/部署验证 |
+| 阶段 | 目标                    | 入口条件              | 主要交付物                                      |
+| ---- | ----------------------- | --------------------- | ----------------------------------------------- |
+| P0   | 设计与工程基线          | 原始需求已提供        | 本文档集、决策记录、进度台账                    |
+| P1   | Monorepo 可启动         | P0 评审通过           | Web/PPT Service/Prisma/Compose/Volume/health    |
+| P2   | 模板解析 Vertical Slice | P1 构建通过           | 上传、存储、POI 解析、持久化、页/占位符列表     |
+| P3   | 任务与页面分发          | P2 真实 PPTX 验证通过 | ReportTask、分配、FillInstance、进度            |
+| P4   | 指标与填报              | P3 权限测试通过       | MySQL Adapter、绑定、人工值、Fast Preview、提交 |
+| P5   | 审核与 FinalValue       | P4 提交流程通过       | 多人结果、冲突解决、退回、乐观锁                |
+| P6   | 生成与真实预览          | P5 FinalValue 完整    | POI 生成、LibreOffice PNG/PDF、下载、溢出告警   |
+| P7   | AI、加固与交付          | 主链路通过            | AI 候选、审计补齐、安全/恢复/部署验证           |
 
 ## 3. P0：设计与工程基线
 
@@ -36,7 +36,7 @@
 任务：
 
 1. 初始化 pnpm workspace/Turborepo（若实际脚手架评估不需要 Turborepo，只保留 pnpm workspace 并记录 ADR）。
-2. 创建 Next.js TypeScript 应用，配置 Tailwind、Radix/shadcn 基础组件与 ESLint。
+2. 创建 Next.js TypeScript 应用，配置 Tailwind、Radix/shadcn 基础组件与 ESLint、@shadcn/lint。
 3. 创建 Java 17 Spring Boot 服务，引入 Web、Validation、Actuator、Apache POI。
 4. 建立 Prisma package、MySQL provider 与初始 schema/migration。
 5. 创建 Compose：`report-web`、`ppt-service`、共享 `report-data:/data`，不强制 MySQL。
@@ -130,4 +130,3 @@
 - 记录决策偏差；影响架构时新增 ADR。
 - 写清当前阻塞、风险及下一项具体工作。
 - 阶段完成时记录完整验证矩阵，不能只写“测试通过”。
-
