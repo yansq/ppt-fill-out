@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { Button } from "@report-platform/ui/button";
 
 import { AuthorizationError } from "@/features/auth/authorization";
+import { FillInEditor } from "@/features/fill-in/fill-in-editor";
 import { getFillInstance, ReportTaskError } from "@/features/report-task/report-task-service";
 import { StartInstanceButton } from "@/features/report-task/start-instance-button";
 
@@ -29,7 +30,7 @@ export default async function FillInstancePage({ params }: { params: Promise<{ i
       </div>
       <Button asChild variant="outline"><Link href="/my-tasks">我的页面</Link></Button>
     </header>
-    <div className="grid gap-6 lg:grid-cols-2">
+    {instance.status === "IN_PROGRESS" || instance.status === "SUBMITTED" ? <FillInEditor initialInstance={instance} /> : <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-lg border bg-card p-5">
         <h2 className="mb-4 text-lg font-semibold">模板页预览</h2>
         <Image alt={`第 ${instance.slideIndex + 1} 页模板预览`} className="h-auto w-full rounded border" height={270} src={instance.previewUrl} unoptimized width={480} />
@@ -44,8 +45,7 @@ export default async function FillInstancePage({ params }: { params: Promise<{ i
         )}</ul> : <p className="text-sm">此页没有动态占位符。</p>}
         {instance.editable && (instance.status === "NOT_STARTED" || instance.status === "RETURNED") ?
           <div className="mt-5"><StartInstanceButton instanceId={instance.id} version={instance.version} /></div> : null}
-        {instance.status === "IN_PROGRESS" ? <p className="mt-5 text-sm">实例已开始。字段绑定与提交功能将在 P4 开放。</p> : null}
       </section>
-    </div>
+    </div>}
   </main>;
 }

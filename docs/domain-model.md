@@ -48,7 +48,7 @@ P3 采用 `expectedVersion` 的目标分配集合替换；每个 `(taskId, templ
 
 ### 绑定与三级值
 
-- `PlaceholderBinding(id, fillInstanceId, placeholderId, sourceType, metricDefinitionId?, metricPeriod?, manualValue?, aiGenerationId?, formatOptionsJson?, version, updatedById, updatedAt)`；`(fillInstanceId, placeholderId)` 唯一。
+- `PlaceholderBinding(id, fillInstanceId, placeholderId, sourceType, metricDefinitionId?, metricPeriod?, manualValue?, sourceSnapshotJson?, aiGenerationId?, formatOptionsJson?, version, updatedById, updatedAt)`；`(fillInstanceId, placeholderId)` 唯一。P4 的 `sourceSnapshotJson` 固定绑定时实际指标值、月份、来源版本与更新时间/人。
 - `SubmittedValue(id, fillInstanceId, placeholderId, valueText, sourceType, sourceSnapshotJson, bindingSnapshotJson, submittedById, submittedAt, submissionRevision)`；`(fillInstanceId, placeholderId, submissionRevision)` 唯一。
 - `FinalValue(id, taskId, placeholderId, valueText, resolutionType, selectedSubmittedValueId?, sourceSnapshotJson?, version, decidedById, decidedAt, updatedAt)`；`(taskId, placeholderId)` 唯一。
 

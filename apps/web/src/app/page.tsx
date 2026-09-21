@@ -13,10 +13,10 @@ export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-8 py-16">
       <section className="rounded-lg border bg-card p-8 text-card-foreground shadow-sm">
-        <p className="mb-3 text-sm font-medium text-primary">REPORT PLATFORM · P3</p>
+        <p className="mb-3 text-sm font-medium text-primary">REPORT PLATFORM · P4</p>
         <h1 className="text-3xl font-semibold tracking-tight">PPT 协同填报与自动报告生成平台</h1>
         <p className="mt-4 max-w-3xl text-base leading-7">
-          模板解析链路已经建立；现已接入登录与模板资源授权，正在建设任务与页面分发。
+          模板解析、登录与任务分发已建立；当前正在接入企业内网指标源与填报流程。
         </p>
         <ul className="mt-8 grid gap-3 md:grid-cols-2">
           {foundations.map((item) => (
@@ -36,9 +36,12 @@ export default function Home() {
             <Link href="/my-tasks">我的填报</Link>
           </Button>
           <Button asChild variant="outline">
+            <Link href="/data-sources">指标数据源</Link>
+          </Button>
+          <Button asChild variant="outline">
             <Link href="/api/auth/signin">登录</Link>
           </Button>
-          <span className="text-sm">当前阶段：P3</span>
+          <span className="text-sm">当前阶段：P4</span>
         </div>
       </section>
     </main>

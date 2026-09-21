@@ -2,7 +2,7 @@
 
 基于固定 `.pptx` 模板，通过结构化指标、人工填报、字段绑定、AI 文本辅助与 Apache POI，稳定生成尽量保持模板格式不变的报告。
 
-当前已完成 **P3 任务与页面分发**，下一阶段是 **P4 指标与填报**。登录、模板、任务创建、多人同页分配、独立填报实例与进度主链路已打通。
+当前已完成 **P3 任务与页面分发**，正在开发 **P4 指标与填报**。独立示例指标库、月份查询、指标修改历史、绑定、人工草稿和提交快照已连通；真正去字的 Fast Preview 背景与企业真实指标库映射尚未完成。
 
 ## 文档导航
 
@@ -18,6 +18,8 @@
 - [P3 分配决策](docs/adr/0005-p3-assignment-replacement.md)：版本化集合替换与已开始实例保护
 - [内网 HTTP 入口决策](docs/adr/0006-intranet-http-auth-url.md)：允许无 HTTPS 的内网入口及边界控制
 - [用户名认证决策](docs/adr/0007-username-credentials.md)：用户名登录、可选邮箱与旧用户迁移
+- [P4 数据源凭据决策](docs/adr/0008-p4-mysql-data-source-credentials.md)：指标库连接边界、加密和探测
+- [P4 示例指标与快照决策](docs/adr/0009-demo-metric-store-and-p4-snapshots.md)：测试库、绑定快照与跨库边界
 
 ## 目标技术栈
 
@@ -60,6 +62,18 @@ pnpm dev
 
 `seed:auth` 无额外变量时仅创建 Collector/Filler 角色。创建登录用户时，在该命令的进程环境中同时设置 `AUTH_SEED_USERNAME`、`AUTH_SEED_PASSWORD`（默认至少 12 位）和 `AUTH_SEED_ROLE=COLLECTOR|FILLER`；不要将密码写入仓库文件或 shell 历史。它会为现有同用户名用户设置/重置密码。仅在隔离测试环境显式设置 `AUTH_SEED_ALLOW_WEAK_PASSWORD=1` 时允许至少 6 位密码。登录入口为 `/api/auth/signin`，使用用户名和密码，无邮箱格式要求；当前没有自助注册。必须设置足够长且保密的 `AUTH_SECRET`。`AUTH_URL` 应指向浏览器实际访问的 HTTP 或 HTTPS 地址，不能包含账号密码。
 
+使用 `/data-sources` 前，还须设置 `ENCRYPTION_KEY` 为随机 32 字节密钥的 Base64 编码，例如在安全终端运行 `openssl rand -base64 32` 后将结果写入不纳入版本控制的部署密钥环境。所有运行中的 Web 实例必须使用同一密钥和 `ENCRYPTION_KEY_VERSION`。丢失密钥会导致既有数据源密码不可解密；不要直接更换版本或密钥，先按 ADR-0008 迁移密文。数据源表中只存加密凭据；浏览器到 Web 的无 HTTPS 流量仍须依赖内网隔离保护。
+
+仅在开发数据库初始化 P4 示例指标时，先部署迁移，然后运行：
+
+```bash
+set -a; source apps/web/.env.local; set +a
+pnpm --filter @report-platform/database migrate:deploy
+pnpm --filter @report-platform/web seed:p4:demo
+```
+
+脚本在与系统库分离的 `report_metrics_demo` 中创建 `metric_record` 与修改历史表，插入 3 个指标 × 4 个月份；只补缺失记录，不覆盖既有值。它还登记加密数据源和指标定义，并在存在 `admin` 的 READY 模板及活动 `aaa` 填报人时创建一次性示例任务。当前本机示例任务为 `P4 示例填报任务`，报告月份 `2026-09`；用 `aaa` 登录“我的填报”即可开始。容器内连接宿主机指标库时，可在首次初始化前设置 `P4_DEMO_SOURCE_HOST=host.docker.internal`，但须确认 MySQL 账号允许该来源。示例库及弱测试账号不得直接用于正式环境。
+
 本机上传模板时，Web 必须配置绝对路径 `STORAGE_ROOT`（例如仓库的 `data` 目录）、`PPT_SERVICE_URL=http://127.0.0.1:8080` 和非示例值 `PPT_SERVICE_API_KEY`。PPT Service 要使用相同的 `STORAGE_ROOT` 和 `PPT_SERVICE_API_KEY`；`pnpm dev` 只启动 Web，不会自动启动 Java 服务。若用 `apps/web/.env.local` 保存本机配置，Next.js 会自动读取它，但启动 Java 服务的终端仍需显式载入这些变量。该文件已被 Git 忽略。
 
 本机 LibreOffice 缺少可用的中文字体回退时，上传可以成功，但预览可能把中文画成方框或留白。建议使用已安装 `fonts-noto-cjk` 的 PPT Service 镜像，并将 Web 的本地 `data` 目录挂载为容器 `/data`；先执行 `docker build -t report-platform-ppt-service:latest apps/ppt-service`，再在仓库根目录运行：
@@ -89,6 +103,9 @@ STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 - 模板管理：`GET /templates`，须先登录；Collector 可上传，只有模板创建者或关联任务成员可读取
 - 报告任务：`GET /report-tasks`，Collector 创建任务、按页分配 Filler 并查看进度
 - 我的填报：`GET /my-tasks`，只列出当前账号的 FillInstance
+- 指标数据源：`GET /data-sources`，仅 Collector 可创建 MySQL 指标源和测试连接
+- 指标管理：`GET /metrics`，Collector 按月查询、修改示例指标并查看原因/历史
+- 填报实例：`GET /fill-instances/{id}`，Filler 可切换指标查看月份、保存指标/人工绑定并提交本页；Fast Preview 为近似编辑反馈
 - PPT liveness：`GET http://localhost:8080/actuator/health/liveness`
 - PPT readiness：`GET http://localhost:8080/actuator/health/readiness`
 

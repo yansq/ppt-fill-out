@@ -328,6 +328,7 @@ model PlaceholderBinding {
   metricDefinitionId String?
   metricPeriod       String?             @db.Char(7)
   manualValue        String?             @db.Text
+  sourceSnapshotJson Json?
   aiGenerationId     String?
   formatOptionsJson  Json?
   version            Int                 @default(0)

@@ -45,3 +45,9 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.fast-preview-field {
+  left: var(--field-left);
+  top: var(--field-top);
+  width: var(--field-width);
+  height: var(--field-height);
+}

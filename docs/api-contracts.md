@@ -45,6 +45,12 @@ P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`。业务 API 从�
 | 导出 | `POST /api/report-tasks/{id}/exports` | 任务 Collector |
 | 下载文件 | `GET /api/files/{id}` | 由文件关联资源决定 |
 
+P4 第一切片新增 `GET/POST /api/data-sources` 和 `POST /api/data-sources/{id}/test`，均仅允许 Collector。创建请求为 `{ name, host, port?, databaseName, username, password }`，目前只创建 `MYSQL` 类型。列表及创建响应不包含密码或密文；连接测试成功返回 `{ ok: true, latencyMs }`，失败统一返回 `DATASOURCE_UNAVAILABLE`，不暴露驱动错误。配置启用状态与连接健康不是同一字段，详见 ADR-0008。
+
+P4 示例指标库链路已实现：`GET /api/fill-instances/{id}/metrics?period=YYYY-MM` 只向有权实例成员返回该月指标、任务 `reportPeriod` 和独立 `viewPeriod`；`PUT /api/fill-instances/{id}/bindings/{placeholderId}` 支持 `{ expectedVersion, sourceType: "MANUAL_TEXT", manualValue }` 或 `{ expectedVersion, sourceType: "DATABASE_METRIC", metricDefinitionId, metricPeriod }`。后者保存实际指标月份及来源快照，不改变任务月份。`POST /api/fill-instances/{id}/submit` 以 `{ expectedVersion }` 事务化冻结全部占位符的 SubmittedValue，缺失绑定返回 400，过期版本返回 409。
+
+Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{definitionId}`（`{ period, value, expectedVersion, reason }`）和 `GET /api/metrics/{definitionId}/history?period=YYYY-MM`。当前只支持 ADR-0009 的固定测试表映射；源库版本冲突返回 409，外部更新成功但系统镜像失败返回 `SYNC_PENDING`，要求人工对账。
+
 P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名 Filler 分别对应独立 FillInstance；无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
 
 `POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前 Filler 的实例；他人的实例 ID 返回 404。
