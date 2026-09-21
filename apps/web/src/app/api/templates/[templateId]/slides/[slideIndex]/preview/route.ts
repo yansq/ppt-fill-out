@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { AuthorizationError } from "@/features/auth/authorization";
 import { getTemplatePreview, TemplateUploadError } from "@/features/template/template-service";
 
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ export async function GET(
       }
     });
   } catch (error) {
-    if (error instanceof TemplateUploadError) {
+    if (error instanceof TemplateUploadError || error instanceof AuthorizationError) {
       return NextResponse.json(
         { error: { code: error.code, message: error.message } },
         { status: error.status }

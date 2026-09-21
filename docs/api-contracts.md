@@ -21,15 +21,19 @@
 
 实际可采用 Route Handlers 或 Server Actions；无论传输形式如何，下列服务边界与授权规则保持一致。
 
+P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`。业务 API 从服务端会话取得用户 ID，不接受调用方提交的 `actorId`。无会话返回 401，无角色返回 403；无权访问的模板及其缩略图按 404 隐藏资源存在性。
+
 | 能力 | 建议接口 | 服务端授权 |
 |---|---|---|
 | 上传模板 | `POST /api/templates` | Collector |
 | 查询解析状态 | `GET /api/templates/{id}` | 创建者或有权任务成员 |
 | 查询模板页 | `GET /api/templates/{id}/slides` | 同上 |
 | 创建任务 | `POST /api/report-tasks` | Collector |
+| 任务列表与详情 | `GET /api/report-tasks`、`GET /api/report-tasks/{id}` | 任务 Collector |
 | 分配页面 | `PUT /api/report-tasks/{id}/assignments` | 任务 Collector |
 | 我的填报实例 | `GET /api/fill-instances/mine` | 当前用户 |
 | 填报详情 | `GET /api/fill-instances/{id}` | assignee 或任务 Collector |
+| 开始填报 | `POST /api/fill-instances/{id}/start` | 实例 assignee 且持有 Filler 角色 |
 | 更新绑定/草稿 | `PUT /api/fill-instances/{id}/bindings/{placeholderId}` | assignee；可编辑状态 |
 | 提交 | `POST /api/fill-instances/{id}/submit` | assignee；expectedVersion |
 | 退回 | `POST /api/fill-instances/{id}/return` | 任务 Collector |
@@ -40,6 +44,10 @@
 | 真实预览 | `POST /api/report-tasks/{id}/real-preview` | 任务 Collector |
 | 导出 | `POST /api/report-tasks/{id}/exports` | 任务 Collector |
 | 下载文件 | `GET /api/files/{id}` | 由文件关联资源决定 |
+
+P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名 Filler 分别对应独立 FillInstance；无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
+
+`POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前 Filler 的实例；他人的实例 ID 返回 404。
 
 ### 上传模板的最小响应
 

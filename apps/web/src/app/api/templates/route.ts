@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { AuthorizationError, requireCollector } from "@/features/auth/authorization";
 import { PptxValidationError } from "@/features/template/pptx-validation";
 import {
   listTemplates,
@@ -20,7 +21,7 @@ export async function GET() {
   try {
     return NextResponse.json({ templates: await listTemplates() });
   } catch (error) {
-    if (error instanceof TemplateUploadError) {
+    if (error instanceof TemplateUploadError || error instanceof AuthorizationError) {
       return errorResponse(error.code, error.message, error.status);
     }
     return errorResponse("DATABASE_UNAVAILABLE", "模板列表暂时不可用", 503);
@@ -29,6 +30,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    await requireCollector();
     const contentLength = Number.parseInt(request.headers.get("content-length") ?? "0", 10);
     const multipartOverheadAllowance = 1024 * 1024;
     if (Number.isFinite(contentLength) && contentLength > maxUploadBytes() + multipartOverheadAllowance) {
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
     const template = await uploadTemplate({ name, file });
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
-    if (error instanceof TemplateUploadError) {
+    if (error instanceof TemplateUploadError || error instanceof AuthorizationError) {
       return errorResponse(error.code, error.message, error.status);
     }
     if (error instanceof PptxValidationError || error instanceof ZodError) {

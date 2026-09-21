@@ -1,8 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 
 import { Button } from "@report-platform/ui/button";
 
+import { AuthorizationError, currentActor } from "@/features/auth/authorization";
 import { listTemplates } from "@/features/template/template-service";
 import { TemplateUploadForm } from "@/features/template/template-upload-form";
 import { TemplateRetryButton } from "@/features/template/template-retry-button";
@@ -10,6 +12,13 @@ import { TemplateRetryButton } from "@/features/template/template-retry-button";
 export const dynamic = "force-dynamic";
 
 export default async function TemplatesPage() {
+  let actor;
+  try {
+    actor = await currentActor();
+  } catch (error) {
+    if (error instanceof AuthorizationError) redirect("/api/auth/signin?callbackUrl=/templates");
+    throw error;
+  }
   let templates: Awaited<ReturnType<typeof listTemplates>> = [];
   let databaseAvailable = true;
   try {
@@ -28,12 +37,14 @@ export default async function TemplatesPage() {
             上传固定格式的 PPTX。系统会校验文件、识别普通文本和表格中的业务占位符，并保存页面与定位信息。
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/">返回首页</Link>
-        </Button>
+        <div className="flex gap-2">
+          {actor.roles.has("COLLECTOR") ? <Button asChild variant="outline"><Link href="/report-tasks">报告任务</Link></Button> : null}
+          <Button asChild variant="outline"><Link href="/">返回首页</Link></Button>
+          <Button asChild variant="outline"><Link href="/api/auth/signout">退出登录</Link></Button>
+        </div>
       </header>
 
-      <section className="rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
+      {actor.roles.has("COLLECTOR") ? <section className="rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
         <h2 className="text-lg font-semibold">上传模板</h2>
         <p className="mb-6 mt-1 text-sm">首版占位符格式为 {"{{placeholder_key}}"}，支持跨 TextRun 和 Table Cell。</p>
         {databaseAvailable ? (
@@ -43,7 +54,7 @@ export default async function TemplatesPage() {
             系统数据库当前不可用。请检查 DATABASE_URL 和 migration 状态后重试。
           </p>
         )}
-      </section>
+      </section> : null}
 
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between">
@@ -67,7 +78,7 @@ export default async function TemplatesPage() {
                   </div>
                   <span className="text-sm">{template.slides.length} 页</span>
                 </div>
-                {template.status === "PARSE_FAILED" ? (
+                {template.status === "PARSE_FAILED" && template.createdById === actor.id ? (
                   <div className="mt-4">
                     <TemplateRetryButton templateId={template.id} />
                   </div>

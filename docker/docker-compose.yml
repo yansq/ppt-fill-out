@@ -28,21 +28,19 @@ services:
       dockerfile: apps/web/Dockerfile
     environment:
       AUTH_SECRET: ${AUTH_SECRET}
-      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      AUTH_URL: ${AUTH_URL}
       DATABASE_URL: ${DATABASE_URL}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       ENCRYPTION_KEY_VERSION: ${ENCRYPTION_KEY_VERSION:-v1}
       PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY}
       PPT_SERVICE_URL: http://ppt-service:8080
-      P2_ALLOW_INSECURE_ACTOR: ${P2_ALLOW_INSECURE_ACTOR:-false}
-      P2_DEVELOPMENT_ACTOR_EMAIL: ${P2_DEVELOPMENT_ACTOR_EMAIL:-collector@local.test}
       STORAGE_ROOT: /data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - report-data:/data
     ports:
-      - "3000:3000"
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:3000"
     depends_on:
       ppt-service:
         condition: service_healthy

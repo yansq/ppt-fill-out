@@ -102,6 +102,7 @@ docs/
 
 ## 7. 安全边界
 
+- P3 使用 Auth.js Credentials 用户名/密码登录，不要求邮箱。JWT 仅证明用户 ID；每次业务请求重新检查用户状态、实时角色和资源关系，详见 ADR-0003、ADR-0007。
 - 浏览器永不直接调用 PPT Service；服务只暴露在 Compose 内网。
 - 所有业务 API 先认证，再做 task/fill-instance/file 资源校验。
 - 上传文件采用白名单、大小限制、ZIP bomb 防护、路径规范化和随机服务端文件名。
@@ -119,6 +120,7 @@ docs/
 ## 9. 部署与配置
 
 - Compose 必含 `report-web`、`ppt-service` 与命名 Volume `report-data:/data`，不强制包含 MySQL。
+- 企业内网运行默认仅在宿主机回环地址发布 Web；`AUTH_URL` 为浏览器实际访问的 HTTP 或 HTTPS 地址。无 TLS 时必须以网络隔离和访问控制限制入口；镜像构建和运行关闭 Next.js 遥测。详见 ADR-0004、ADR-0006。
 - `DATABASE_URL` 支持宿主机或外部地址；文档分别说明 macOS/Windows 的 `host.docker.internal` 与 Linux host-gateway 配置。
 - 健康检查区分 liveness 与 readiness。PPT readiness 检查 Java 服务与 LibreOffice 可执行文件；Web readiness 检查关键配置和系统数据库连接，不强制 AI/指标数据源在线。
 
@@ -127,4 +129,3 @@ docs/
 - 每个请求带 correlation id，并透传至 PPT Service。
 - 结构化日志不得包含密码、API Key 或完整业务敏感文本。
 - 首版至少记录上传/解析/渲染/生成耗时、状态和失败原因；后续可在不改变业务接口的前提下接入 metrics/tracing。
-

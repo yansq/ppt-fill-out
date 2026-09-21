@@ -1,6 +1,19 @@
 import type { HealthResponse } from "@report-platform/shared";
 
-const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "PPT_SERVICE_URL", "STORAGE_ROOT"] as const;
+const REQUIRED_ENVIRONMENT = [
+  "DATABASE_URL", "PPT_SERVICE_URL", "STORAGE_ROOT", "AUTH_SECRET", "AUTH_URL", "PPT_SERVICE_API_KEY"
+] as const;
+
+function browserAuthUrlIsValid(value: string | undefined) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) return false;
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 export interface ReadinessDependencies {
   databaseProbe: () => Promise<void>;
@@ -25,7 +38,11 @@ export async function readiness({
   let ready = true;
 
   for (const name of REQUIRED_ENVIRONMENT) {
-    const configured = Boolean(environment[name]?.trim());
+    const value = environment[name];
+    let configured = Boolean(value?.trim());
+    if (name === "AUTH_URL") configured = browserAuthUrlIsValid(value);
+    if (name === "AUTH_SECRET") configured = (value?.length ?? 0) >= 32 && !value?.startsWith("replace-");
+    if (name === "PPT_SERVICE_API_KEY") configured &&= !value?.startsWith("replace-");
     checks[`env.${name}`] = configured ? "ok" : "error";
     ready &&= configured;
   }

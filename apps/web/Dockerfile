@@ -1,4 +1,5 @@
 FROM node:22-alpine AS base
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install --global pnpm@10.13.1
 WORKDIR /app
 
@@ -21,6 +22,7 @@ RUN pnpm --filter @report-platform/database generate && pnpm --filter @report-pl
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 WORKDIR /app

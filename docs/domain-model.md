@@ -24,10 +24,10 @@ User --< OperationLog
 
 ### 认证与权限
 
-- `User(id, email, name, status, createdAt, updatedAt)`；email 唯一。
+- `User(id, username, email?, name, status, createdAt, updatedAt)`；username 唯一且用于登录，email 可选、填写时唯一。既有用户的 email 在迁移时回填为 username。
 - `Role(id, code, name)`；code 唯一，首版为 `COLLECTOR`、`FILLER`。
 - `UserRole(userId, roleId)`；复合唯一键。
-- Auth.js 所需 Account/Session/VerificationToken 根据所选 adapter 增补。
+- P3 Credentials 身份源使用 `UserCredential(userId, passwordHash, failedAttempts, lockedUntil, updatedAt)`；密码与业务 User 分表。Auth.js 当前使用 JWT 会话，Account/Session/VerificationToken 为未来 OAuth/数据库会话保留。
 
 ### 模板
 
@@ -44,6 +44,7 @@ User --< OperationLog
 - `FillInstance(id, assignmentId, taskId, templateSlideId, assigneeId, status, version, submittedAt, reviewedAt, createdAt, updatedAt)`；assignmentId 唯一；索引 `(assigneeId, status)`、`(taskId, status)`。
 
 冗余保存 task/slide/assignee 外键用于权限查询效率，但创建时必须验证与 assignment 一致。
+P3 采用 `expectedVersion` 的目标分配集合替换；每个 `(taskId, templateSlideId, assigneeId)` 只对应一个 FillInstance。已有填报痕迹的实例不能被该接口删除，详见 ADR-0005。
 
 ### 绑定与三级值
 
@@ -85,4 +86,3 @@ User --< OperationLog
 - 更新条件包含 `id + expectedVersion`；影响行数为 0 时返回 `409 VERSION_CONFLICT` 和最新摘要。
 - 提交后编辑需先退回；审核已变更的 submission revision 时拒绝保存，要求刷新。
 - 指标外部更新成功而本地 history 失败时记录可恢复的 reconciliation 状态和操作日志，不能返回完全成功。
-

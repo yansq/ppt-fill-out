@@ -93,7 +93,8 @@ enum GenerationStatus {
 
 model User {
   id                    String               @id @default(cuid())
-  email                 String               @unique @db.VarChar(191)
+  username              String               @unique @db.VarChar(191)
+  email                 String?              @unique @db.VarChar(191)
   name                  String?              @db.VarChar(191)
   emailVerified         DateTime?
   image                 String?              @db.Text
@@ -117,6 +118,16 @@ model User {
   generatedFilesCreated GeneratedFile[]       @relation("GeneratedFileCreator")
   aiGenerations         AiGeneration[]        @relation("AiCreator")
   operationLogs         OperationLog[]        @relation("OperationActor")
+  credential            UserCredential?
+}
+
+model UserCredential {
+  userId         String    @id
+  passwordHash   String    @db.VarChar(255)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Role {

@@ -3,6 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma, TemplateStatus, prisma } from "@report-platform/database";
 import { z } from "zod";
 
+import { currentActor, requireCollector } from "@/features/auth/authorization";
+
 import {
   parseTemplate,
   renderTemplate,
@@ -38,48 +40,22 @@ export function maxUploadBytes() {
   return parsed * 1024 * 1024;
 }
 
-function assertDevelopmentAccess() {
-  if (process.env.NODE_ENV === "production" && process.env.P2_ALLOW_INSECURE_ACTOR !== "true") {
-    throw new TemplateUploadError(
-      "AUTH_NOT_IMPLEMENTED",
-      "生产环境认证将在 P3 接入；P2 临时身份未显式启用",
-      501
-    );
+function visibleTemplateWhere(actor: Awaited<ReturnType<typeof currentActor>>): Prisma.ReportTemplateWhereInput {
+  const accessible: Prisma.ReportTemplateWhereInput[] = [];
+  if (actor.roles.has("COLLECTOR")) {
+    accessible.push({ createdById: actor.id });
+    accessible.push({ tasks: { some: { collectorId: actor.id } } });
   }
-}
-
-async function developmentCollector(tx: Prisma.TransactionClient) {
-  assertDevelopmentAccess();
-  const email = process.env.P2_DEVELOPMENT_ACTOR_EMAIL?.trim().toLowerCase();
-  if (!email) {
-    throw new TemplateUploadError(
-      "CONFIGURATION_ERROR",
-      "本地 P2 验证需要配置 P2_DEVELOPMENT_ACTOR_EMAIL",
-      500
-    );
+  if (actor.roles.has("FILLER")) {
+    accessible.push({ tasks: { some: { assignments: { some: { assigneeId: actor.id } } } } });
   }
-
-  const role = await tx.role.upsert({
-    where: { code: "COLLECTOR" },
-    create: { code: "COLLECTOR", name: "收集人" },
-    update: {}
-  });
-  const user = await tx.user.upsert({
-    where: { email },
-    create: { email, name: "P2 本地收集人" },
-    update: {}
-  });
-  await tx.userRole.upsert({
-    where: { userId_roleId: { userId: user.id, roleId: role.id } },
-    create: { userId: user.id, roleId: role.id },
-    update: {}
-  });
-  return user;
+  return accessible.length ? { OR: accessible } : { id: { in: [] } };
 }
 
 function templateDto(template: NonNullable<Awaited<ReturnType<typeof findTemplate>>>) {
   return {
     id: template.id,
+    createdById: template.createdById,
     name: template.name,
     version: template.version,
     status: template.status,
@@ -277,7 +253,7 @@ async function processTemplate(params: {
 }
 
 export async function uploadTemplate(params: { name: string; file: File }) {
-  assertDevelopmentAccess();
+  const actor = await requireCollector();
   const name = templateNameSchema.parse(params.name);
   if (!params.file.name.toLowerCase().endsWith(".pptx")) {
     throw new TemplateUploadError("VALIDATION_ERROR", "只允许上传 .pptx 文件", 400);
@@ -301,7 +277,6 @@ export async function uploadTemplate(params: { name: string; file: File }) {
   try {
     await prisma.$transaction(
       async (tx) => {
-        const actor = await developmentCollector(tx);
         const latest = await tx.reportTemplate.aggregate({ where: { name }, _max: { version: true } });
         const version = (latest._max.version ?? 0) + 1;
         await tx.storedFile.create({
@@ -357,8 +332,9 @@ export async function uploadTemplate(params: { name: string; file: File }) {
 }
 
 export async function listTemplates() {
-  assertDevelopmentAccess();
+  const actor = await currentActor();
   const templates = await prisma.reportTemplate.findMany({
+    where: visibleTemplateWhere(actor),
     orderBy: { createdAt: "desc" },
     include: {
       sourceFile: true,
@@ -372,12 +348,15 @@ export async function listTemplates() {
 }
 
 export async function retryTemplate(templateId: string) {
-  assertDevelopmentAccess();
+  const actor = await requireCollector();
   const template = await prisma.reportTemplate.findUnique({
     where: { id: templateId },
     include: { sourceFile: true }
   });
   if (!template) {
+    throw new TemplateUploadError("NOT_FOUND", "模板不存在", 404);
+  }
+  if (template.createdById !== actor.id) {
     throw new TemplateUploadError("NOT_FOUND", "模板不存在", 404);
   }
   if (template.status !== TemplateStatus.PARSE_FAILED) {
@@ -414,7 +393,12 @@ export async function retryTemplate(templateId: string) {
 }
 
 export async function getTemplatePreview(templateId: string, slideIndex: number) {
-  assertDevelopmentAccess();
+  const actor = await currentActor();
+  const authorizedTemplate = await prisma.reportTemplate.findFirst({
+    where: { id: templateId, ...visibleTemplateWhere(actor) },
+    select: { id: true }
+  });
+  if (!authorizedTemplate) throw new TemplateUploadError("NOT_FOUND", "页面缩略图不存在", 404);
   const slide = await prisma.templateSlide.findUnique({
     where: { templateId_slideIndex: { templateId, slideIndex } },
     include: { previewFile: true }
