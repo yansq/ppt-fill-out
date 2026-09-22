@@ -30,6 +30,7 @@ export default async function FillInstancePage({ params }: { params: Promise<{ i
       </div>
       <Button asChild variant="outline"><Link href="/my-tasks">我的页面</Link></Button>
     </header>
+    {instance.returnReason ? <p className="mb-6 rounded-md border border-primary bg-accent p-4 text-sm" role="status">退回原因：{instance.returnReason}</p> : null}
     {instance.status === "IN_PROGRESS" || instance.status === "SUBMITTED" ? <FillInEditor initialInstance={instance} /> : <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-lg border bg-card p-5">
         <h2 className="mb-4 text-lg font-semibold">模板页预览</h2>

@@ -24,6 +24,7 @@ type EditorInstance = {
   version: number;
   editable: boolean;
   previewUrl: string;
+  staticPreviewUrl: string;
   task: { reportPeriod: string };
   placeholders: {
     id: string;
@@ -130,12 +131,12 @@ export function FillInEditor({ initialInstance }: { initialInstance: EditorInsta
 
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-lg border bg-card p-5">
-        <h2 className="mb-4 text-lg font-semibold">快速预览（位置近似）</h2>
+        <h2 className="mb-4 text-lg font-semibold">快速预览</h2>
         <div className="relative overflow-hidden rounded border">
-          <Image alt="模板页快速预览" className="h-auto w-full" height={540} src={instance.previewUrl} unoptimized width={960} />
+          <Image alt="模板页去字静态背景" className="h-auto w-full" height={540} src={instance.staticPreviewUrl} unoptimized width={960} />
           {instance.placeholders.map((placeholder) => {
             const value = bindingValue(instance.bindings.find((binding) => binding.placeholderId === placeholder.id));
-            return value ? <div className="fast-preview-field absolute overflow-hidden bg-card text-xs text-card-foreground" key={placeholder.id} style={{
+            return value ? <div className="fast-preview-field absolute overflow-hidden text-xs text-foreground" key={placeholder.id} style={{
               "--field-left": `${placeholder.geometry.left}%`, "--field-top": `${placeholder.geometry.top}%`,
               "--field-width": `${placeholder.geometry.width}%`, "--field-height": `${placeholder.geometry.height}%`
             } as React.CSSProperties}>{value}</div> : null;

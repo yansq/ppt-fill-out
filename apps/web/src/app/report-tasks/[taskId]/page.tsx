@@ -7,6 +7,8 @@ import { Button } from "@report-platform/ui/button";
 import { AuthorizationError } from "@/features/auth/authorization";
 import { AssignmentForm } from "@/features/report-task/assignment-form";
 import { getCollectorReportTask, listAssignableFillers, ReportTaskError } from "@/features/report-task/report-task-service";
+import { ReviewPanel } from "@/features/review/review-panel";
+import { getReview } from "@/features/review/review-service";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,7 @@ export default async function ReportTaskDetailPage({ params }: { params: Promise
     throw error;
   }
   const fillers = await listAssignableFillers(task.slides.flatMap((slide) => slide.assignments.map((assignment) => assignment.assignee.id)));
+  const review = await getReview(taskId);
 
   return <main className="mx-auto min-h-screen max-w-6xl px-8 py-12">
     <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -59,5 +62,6 @@ export default async function ReportTaskDetailPage({ params }: { params: Promise
         </article>
       )}</div>
     </section>
+    <ReviewPanel initial={review} />
   </main>;
 }

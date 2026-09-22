@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseTemplate, renderTemplate } from "./ppt-service-client";
+import { parseTemplate, renderStaticPreview, renderTemplate } from "./ppt-service-client";
 
 const originalEnvironment = { ...process.env };
 
@@ -66,5 +66,16 @@ describe("PPT Service client", () => {
         idempotencyKey: "render-1"
       })
     ).rejects.toThrow("inconsistent preview metadata");
+  });
+
+  it("accepts only PNG bytes from the static preview endpoint", async () => {
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(png, {
+      headers: { "Content-Type": "image/png" }
+    })));
+    await expect(renderStaticPreview({
+      relativePath: "templates/a/a.pptx", sha256: "0".repeat(64), slideIndex: 1
+    })).resolves.toEqual(png);
+    expect(fetch).toHaveBeenCalledWith(new URL("/ppt/render-static", "http://ppt-service.test"), expect.objectContaining({ method: "POST" }));
   });
 });

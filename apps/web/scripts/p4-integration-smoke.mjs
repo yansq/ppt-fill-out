@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 
 const databaseRequire = createRequire(new URL("../../../packages/database/package.json", import.meta.url));
@@ -75,6 +75,13 @@ try {
   }, 200);
   const instanceId = assigned.task.slides.find((item) => item.id === slide.id).assignments[0].fillInstance.id;
   await api(outsider, "GET", `/api/fill-instances/${instanceId}`, undefined, 404);
+  const staticPreviewPath = `/api/templates/${template.id}/slides/${slide.slideIndex}/static-preview`;
+  const staticPreview = await fetch(`${baseUrl}${staticPreviewPath}`, { headers: { Cookie: filler } });
+  assert.equal(staticPreview.status, 200, "filler static preview unavailable");
+  assert.match(staticPreview.headers.get("content-type") ?? "", /image\/png/);
+  assert.ok((await staticPreview.arrayBuffer()).byteLength > 1000);
+  const hiddenPreview = await fetch(`${baseUrl}${staticPreviewPath}`);
+  assert.equal(hiddenPreview.status, 401, "anonymous user must not read static preview");
   const started = await api(filler, "POST", `/api/fill-instances/${instanceId}/start`, { expectedVersion: 0 }, 200);
   await page(filler, `/fill-instances/${instanceId}`);
   const metrics = await api(filler, "GET", `/api/fill-instances/${instanceId}/metrics?period=2026-08`, undefined, 200);
@@ -123,9 +130,28 @@ try {
   }, 409);
   const history = await api(admin, "GET", `/api/metrics/${metric.definitionId}/history?period=2026-08`, undefined, 200);
   assert.ok(history.items.some((item) => item.newValueText === changedValue && item.reason === "P4 冒烟测试修正"));
+  const dimensionsHash = createHash("sha256").update("{}").digest("hex");
+  const mirror = await prisma.metricValue.findUniqueOrThrow({
+    where: { metricDefinitionId_period_dimensionsHash: { metricDefinitionId: metric.definitionId, period: "2026-08", dimensionsHash } }
+  });
+  assert.equal(mirror.sourceVersion, String(changed.metric.version));
+  const latestHistory = await prisma.metricValueHistory.findFirstOrThrow({
+    where: { metricValueId: mirror.id, expectedVersion: metric.version }, orderBy: { createdAt: "desc" }
+  });
+  await prisma.$transaction(async (tx) => {
+    await tx.metricValueHistory.delete({ where: { id: latestHistory.id } });
+    await tx.metricValue.update({ where: { id: mirror.id }, data: {
+      valueText: originalValue, valueNumber: originalValue,
+      sourceVersion: String(metric.version), sourceUpdatedAt: new Date(metric.updatedAt), version: { increment: 1 }
+    } });
+  });
+  const recovered = await api(admin, "POST", `/api/metrics/${metric.definitionId}/reconcile`, { period: "2026-08" }, 200);
+  assert.equal(recovered.appliedChanges, 1, "reconciliation should replay the missing source change");
+  const synced = await api(admin, "POST", `/api/metrics/${metric.definitionId}/reconcile`, { period: "2026-08" }, 200);
+  assert.equal(synced.appliedChanges, 0, "idempotent reconciliation should not replay changes");
   const stillFrozen = await prisma.submittedValue.findUniqueOrThrow({ where: { id: frozen.id } });
   assert.equal(stillFrozen.valueText, originalValue);
-  process.stdout.write("P4 smoke: role isolation, period separation, binding conflict, submission snapshot, metric history and source-version conflict passed.\n");
+  process.stdout.write("P4 smoke: static preview authorization, period separation, binding conflict, submission snapshot, metric history, reconciliation and source-version conflict passed.\n");
 
   await api(admin, "PUT", `/api/metrics/${metric.definitionId}`, {
     period: "2026-08", value: originalValue, expectedVersion: changed.metric.version, reason: "恢复冒烟前测试值"

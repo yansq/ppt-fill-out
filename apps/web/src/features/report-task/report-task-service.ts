@@ -353,6 +353,13 @@ export async function getFillInstance(instanceId: string) {
     }
   });
   if (!instance) return notFound();
+  const lastReturn = instance.status === "RETURNED" || instance.status === "IN_PROGRESS"
+    ? await prisma.operationLog.findFirst({
+      where: { resourceType: "FillInstance", resourceId: instance.id, action: "FILL_INSTANCE_RETURNED" },
+      orderBy: { createdAt: "desc" }, select: { metadataJson: true }
+    })
+    : null;
+  const returnMetadata = lastReturn?.metadataJson as { reason?: string } | null;
   return {
     id: instance.id,
     status: instance.status,
@@ -374,6 +381,8 @@ export async function getFillInstance(instanceId: string) {
     })),
     bindings: instance.bindings,
     previewUrl: `/api/templates/${instance.templateSlide.templateId}/slides/${instance.templateSlide.slideIndex}/preview`,
+    staticPreviewUrl: `/api/templates/${instance.templateSlide.templateId}/slides/${instance.templateSlide.slideIndex}/static-preview`,
+    returnReason: returnMetadata?.reason ?? null,
     editable: actor.roles.has("FILLER") && instance.assigneeId === actor.id
   };
 }

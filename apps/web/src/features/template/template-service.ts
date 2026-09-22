@@ -7,6 +7,7 @@ import { currentActor, requireCollector } from "@/features/auth/authorization";
 
 import {
   parseTemplate,
+  renderStaticPreview,
   renderTemplate,
   type PptParseResponse,
   type PptRenderResponse
@@ -411,4 +412,22 @@ export async function getTemplatePreview(templateId: string, slideIndex: number)
     mimeType: slide.previewFile.mimeType,
     sha256: slide.previewFile.sha256
   };
+}
+
+export async function getTemplateStaticPreview(templateId: string, slideIndex: number) {
+  const actor = await currentActor();
+  const template = await prisma.reportTemplate.findFirst({
+    where: { id: templateId, ...visibleTemplateWhere(actor) },
+    select: {
+      sourceFile: { select: { storagePath: true, sha256: true } },
+      slides: { where: { slideIndex }, select: { id: true }, take: 1 }
+    }
+  });
+  if (!template?.slides.length) throw new TemplateUploadError("NOT_FOUND", "静态预览不存在", 404);
+  const bytes = await renderStaticPreview({
+    relativePath: template.sourceFile.storagePath,
+    sha256: template.sourceFile.sha256,
+    slideIndex
+  });
+  return { bytes, sha256: createHash("sha256").update(bytes).digest("hex") };
 }

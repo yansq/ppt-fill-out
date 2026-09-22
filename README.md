@@ -2,7 +2,7 @@
 
 基于固定 `.pptx` 模板，通过结构化指标、人工填报、字段绑定、AI 文本辅助与 Apache POI，稳定生成尽量保持模板格式不变的报告。
 
-当前已完成 **P3 任务与页面分发**，正在开发 **P4 指标与填报**。独立示例指标库、月份查询、指标修改历史、绑定、人工草稿和提交快照已连通；真正去字的 Fast Preview 背景与企业真实指标库映射尚未完成。
+当前 **P4 测试数据主链路已验证**，正在开发 **P5 审核与 FinalValue**。示例指标库、去字 Fast Preview、提交快照、多人审核与退回重提可在本地体验；企业真实指标库映射及容器复验尚未完成。
 
 ## 文档导航
 
@@ -20,6 +20,8 @@
 - [用户名认证决策](docs/adr/0007-username-credentials.md)：用户名登录、可选邮箱与旧用户迁移
 - [P4 数据源凭据决策](docs/adr/0008-p4-mysql-data-source-credentials.md)：指标库连接边界、加密和探测
 - [P4 示例指标与快照决策](docs/adr/0009-demo-metric-store-and-p4-snapshots.md)：测试库、绑定快照与跨库边界
+- [去字背景与镜像补偿决策](docs/adr/0010-static-preview-and-metric-reconciliation.md)：静态背景、源库历史对账
+- [P5 审核决策](docs/adr/0011-p5-review-revisions-and-final-value.md)：多人 revision、退回失效与 FinalValue
 
 ## 目标技术栈
 
@@ -101,11 +103,11 @@ STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 - Web liveness：`GET /api/health/live`
 - Web readiness：`GET /api/health/ready`，关键配置或系统 MySQL 不可用时返回 503
 - 模板管理：`GET /templates`，须先登录；Collector 可上传，只有模板创建者或关联任务成员可读取
-- 报告任务：`GET /report-tasks`，Collector 创建任务、按页分配 Filler 并查看进度
+- 报告任务：`GET /report-tasks`，Collector 创建任务、按页分配 Filler、查看进度并审核多人提交
 - 我的填报：`GET /my-tasks`，只列出当前账号的 FillInstance
 - 指标数据源：`GET /data-sources`，仅 Collector 可创建 MySQL 指标源和测试连接
 - 指标管理：`GET /metrics`，Collector 按月查询、修改示例指标并查看原因/历史
-- 填报实例：`GET /fill-instances/{id}`，Filler 可切换指标查看月份、保存指标/人工绑定并提交本页；Fast Preview 为近似编辑反馈
+- 填报实例：`GET /fill-instances/{id}`，Filler 可切换指标查看月份、保存指标/人工绑定并提交本页；Fast Preview 使用去字静态背景，仅作编辑反馈
 - PPT liveness：`GET http://localhost:8080/actuator/health/liveness`
 - PPT readiness：`GET http://localhost:8080/actuator/health/readiness`
 

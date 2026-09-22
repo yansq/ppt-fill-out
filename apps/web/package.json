@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:p3:smoke": "node scripts/p3-integration-smoke.mjs",
     "seed:p4:demo": "node scripts/seed-demo-metrics.mjs",
-    "test:p4:smoke": "node scripts/p4-integration-smoke.mjs"
+    "test:p4:smoke": "node scripts/p4-integration-smoke.mjs",
+    "test:p5:smoke": "node scripts/p5-integration-smoke.mjs"
   },
   "dependencies": {
     "@report-platform/database": "workspace:*",

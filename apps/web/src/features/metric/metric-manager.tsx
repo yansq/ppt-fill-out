@@ -96,6 +96,26 @@ function MetricRow({ item, onUpdated }: { item: Metric; onUpdated: (metric: Metr
     }
   }
 
+  async function reconcile() {
+    setPending(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/metrics/${item.definitionId}/reconcile`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period: item.period })
+      });
+      const payload = await response.json() as { metric?: Metric; appliedChanges?: number; error?: { message: string } };
+      if (!response.ok || !payload.metric) throw new Error(payload.error?.message ?? "同步失败");
+      onUpdated(payload.metric);
+      setValue(payload.metric.valueText);
+      setMessage(`平台记录已同步 · 补记 ${payload.appliedChanges ?? 0} 条变更`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "同步失败");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return <article className="rounded-lg border bg-card p-5">
     <h2 className="font-semibold">{item.name} <span className="text-sm font-normal">({item.code})</span></h2>
     <p className="mt-1 text-sm">{item.dataSource.name} · {item.period} · v{item.version} · 当前值 {item.valueText}{item.unit ? ` ${item.unit}` : ""}</p>
@@ -107,6 +127,7 @@ function MetricRow({ item, onUpdated }: { item: Metric; onUpdated: (metric: Metr
     <div className="mt-4 flex flex-wrap items-center gap-3">
       <Button disabled={pending || !value.trim() || reason.trim().length < 3} onClick={update} type="button" variant="outline">保存修改</Button>
       <Button disabled={pending} onClick={loadHistory} type="button" variant="outline">查看历史</Button>
+      <Button disabled={pending} onClick={reconcile} type="button" variant="outline">同步平台记录</Button>
       {message ? <span className="text-sm" role="status">{message}</span> : null}
     </div>
     {history ? <ul className="mt-4 space-y-2 text-sm">{history.length ? history.map((entry) => <li className="rounded-md border p-3" key={`${entry.newVersion}:${entry.updatedAt}`}>

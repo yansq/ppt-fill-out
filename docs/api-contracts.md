@@ -51,9 +51,13 @@ P4 示例指标库链路已实现：`GET /api/fill-instances/{id}/metrics?period
 
 Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{definitionId}`（`{ period, value, expectedVersion, reason }`）和 `GET /api/metrics/{definitionId}/history?period=YYYY-MM`。当前只支持 ADR-0009 的固定测试表映射；源库版本冲突返回 409，外部更新成功但系统镜像失败返回 `SYNC_PENDING`，要求人工对账。
 
+P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`，返回已移除占位符文字的 PNG；模板访问权限与常规预览相同，响应为私有缓存。`POST /api/metrics/{definitionId}/reconcile` 接收 `{ period }`，只允许 Collector；它按源库连续版本历史补齐平台镜像，响应包含 `appliedChanges`，版本缺口返回 `SYNC_HISTORY_GAP`，无新变更时幂等返回 0。
+
 P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名 Filler 分别对应独立 FillInstance；无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
 
 `POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前 Filler 的实例；他人的实例 ID 返回 404。
+
+P5 审核：`GET /api/report-tasks/{id}/review` 返回每页最新提交值、一致/冲突/缺失标识和当前 FinalValue，仅任务 Collector 可访问。`PUT /api/report-tasks/{id}/final-values/{placeholderId}` 接收 `{ expectedVersion, resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId }` 或 `{ expectedVersion, resolutionType: "MANUAL", valueText }`；版本是 ReportTask 版本，所选提交必须为本任务该占位符当前 revision。`POST /api/report-tasks/{id}/fill-instances/{instanceId}/return` 接收 `{ expectedVersion, reason }`，退回时清除同页 FinalValue；`POST /api/report-tasks/{id}/review` 接收 `{ expectedVersion }` 完成审核，要求全部实例已提交且所有已分配页占位符都有 FinalValue。状态或版本冲突返回 409。
 
 ### 上传模板的最小响应
 
@@ -105,6 +109,10 @@ Java 进程存活即可成功。
 P2 页缩略图请求包含 `fileId`、`templateId`、模板相对路径、SHA-256、`outputFormat: PNG` 和 `idempotencyKey`。响应包含 `pageCount`、`files[]` 和 `warnings[]`；每个文件记录 `slideIndex`、相对路径、MIME、大小和 SHA-256。P6 再扩展 PDF、页码范围和最终报告预览。
 
 Web 保存每个 PNG 为 `StoredFile(PREVIEW)` 并关联 `TemplateSlide.previewFileId`。渲染输出位于 `previews/{templateId}/slide-{n}.png`，PPT Service 必须通过临时目录转换并在失败时清理已移动文件。
+
+### `POST /ppt/render-static`
+
+P4 内部请求包含已存模板的 `relativePath`、`sha256` 和零基 `slideIndex`，响应直接为 `image/png`。服务只在临时 PPTX 副本上移除占位符文字，原始文件保持不变；仍受内部 API Key 保护。
 
 ### `POST /ppt/generate`
 

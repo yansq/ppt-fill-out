@@ -13,6 +13,7 @@ export interface MetricDataSource {
   queryMetrics(params: { period: string; sourceCode: string; metricCodes?: string[]; search?: string }): Promise<MetricRecord[]>;
   updateMetric(params: { period: string; sourceCode: string; metricCode: string; value: string; expectedVersion: number; reason: string; actor: string }): Promise<MetricRecord & { previousValueText: string }>;
   getMetricHistory(params: { period: string; sourceCode: string; metricCode: string }): Promise<MetricChange[]>;
+  getMetricChangesSince(params: { period: string; sourceCode: string; metricCode: string; afterVersion: number; throughVersion: number }): Promise<MetricChange[]>;
 }
 
 export interface MetricChange {
@@ -175,6 +176,27 @@ export class MySqlMetricDataSource implements MetricDataSource {
       const [rows] = await connection.execute<ChangeRow[]>(
         "SELECT c.old_value_text, c.new_value_text, c.old_version, c.new_version, c.reason, c.updated_by, c.updated_at FROM metric_record_change c JOIN metric_record r ON r.id = c.record_id WHERE r.data_source_code = ? AND r.metric_code = ? AND r.period = ? ORDER BY c.id DESC LIMIT 50",
         [sourceCode, metricCode, period]
+      );
+      return rows.map((row) => ({
+        oldValueText: row.old_value_text,
+        newValueText: row.new_value_text,
+        oldVersion: row.old_version,
+        newVersion: row.new_version,
+        reason: row.reason,
+        updatedBy: row.updated_by,
+        updatedAt: row.updated_at.toISOString()
+      }));
+    } finally {
+      await connection.end();
+    }
+  }
+
+  async getMetricChangesSince({ period, sourceCode, metricCode, afterVersion, throughVersion }: Parameters<MetricDataSource["getMetricChangesSince"]>[0]) {
+    const connection = await this.connect();
+    try {
+      const [rows] = await connection.execute<ChangeRow[]>(
+        "SELECT c.old_value_text, c.new_value_text, c.old_version, c.new_version, c.reason, c.updated_by, c.updated_at FROM metric_record_change c JOIN metric_record r ON r.id = c.record_id WHERE r.data_source_code = ? AND r.metric_code = ? AND r.period = ? AND c.new_version > ? AND c.new_version <= ? ORDER BY c.new_version ASC LIMIT 1001",
+        [sourceCode, metricCode, period, afterVersion, throughVersion]
       );
       return rows.map((row) => ({
         oldValueText: row.old_value_text,

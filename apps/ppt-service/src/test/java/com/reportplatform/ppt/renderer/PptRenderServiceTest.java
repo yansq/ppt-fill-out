@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.reportplatform.ppt.model.RenderFormat;
 import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
+import com.reportplatform.ppt.model.StaticPreviewRequest;
 import com.reportplatform.ppt.storage.StoragePathResolver;
 import com.reportplatform.ppt.storage.StorageProperties;
 import java.awt.geom.Rectangle2D;
@@ -59,6 +60,25 @@ class PptRenderServiceTest {
             assertThat(file.sha256()).hasSize(64);
             assertThat(ImageIO.read(renderedPath.toFile())).isNotNull();
         }
+    }
+
+    @Test
+    void rendersStaticSlideWithoutMutatingTemplate() throws Exception {
+        String templateId = "c2b38419-6237-43df-8911-b90b0ac6a3b6";
+        Path templatePath = storageRoot.resolve("templates").resolve(templateId).resolve("fixture.pptx");
+        Files.createDirectories(templatePath.getParent());
+        createFixture(templatePath);
+        String originalHash = sha256(templatePath);
+
+        String executable = System.getenv().getOrDefault("LIBREOFFICE_EXECUTABLE", "soffice");
+        Assumptions.assumeTrue(isExecutableAvailable(executable), "LibreOffice is unavailable");
+        PptRenderService service = new PptRenderService(
+                new StoragePathResolver(new StorageProperties(storageRoot)), executable);
+        byte[] preview = service.renderStaticPreview(new StaticPreviewRequest(
+                "templates/" + templateId + "/fixture.pptx", originalHash, 0));
+
+        assertThat(preview.length).isGreaterThan(1000);
+        assertThat(sha256(templatePath)).isEqualTo(originalHash);
     }
 
     private void createFixture(Path outputPath) throws IOException {
