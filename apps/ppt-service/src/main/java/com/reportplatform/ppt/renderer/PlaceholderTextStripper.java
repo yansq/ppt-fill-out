@@ -1,6 +1,11 @@
 package com.reportplatform.ppt.renderer;
 
+import com.reportplatform.ppt.model.DraftPreviewValue;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
@@ -21,22 +26,50 @@ final class PlaceholderTextStripper {
 
     static void strip(XMLSlideShow show) {
         for (XSLFSlide slide : show.getSlides()) {
-            for (XSLFShape shape : slide.getShapes()) {
-                if (shape instanceof XSLFTable table) {
-                    for (int row = 0; row < table.getNumberOfRows(); row++) {
-                        for (int column = 0; column < table.getNumberOfColumns(); column++) {
-                            XSLFTableCell cell = table.getCell(row, column);
-                            if (cell != null) strip(cell);
-                        }
-                    }
-                } else if (shape instanceof XSLFTextShape textShape) {
-                    strip(textShape);
-                }
-            }
+            replace(slide, Map.of());
         }
     }
 
-    private static void strip(XSLFTextShape shape) {
+    static void fill(XMLSlideShow show, int slideIndex, List<DraftPreviewValue> values) {
+        Map<String, String> replacements = new HashMap<>();
+        for (DraftPreviewValue value : values) {
+            if (replacements.putIfAbsent(tokenKey(value.key(), value.occurrenceIndex()), value.valueText()) != null) {
+                throw new PptRenderException("Duplicate draft preview value");
+            }
+        }
+        Set<String> consumed = replace(show.getSlides().get(slideIndex), replacements);
+        if (!consumed.containsAll(replacements.keySet())) {
+            throw new PptRenderException("Draft preview value does not match template placeholder");
+        }
+    }
+
+    private static Set<String> replace(XSLFSlide slide, Map<String, String> replacements) {
+        Map<String, Integer> occurrences = new HashMap<>();
+        Set<String> consumed = new HashSet<>();
+        for (XSLFShape shape : slide.getShapes()) {
+            if (shape instanceof XSLFTable table) {
+                for (int row = 0; row < table.getNumberOfRows(); row++) {
+                    for (int column = 0; column < table.getNumberOfColumns(); column++) {
+                        XSLFTableCell cell = table.getCell(row, column);
+                        if (cell != null) replace(cell, replacements, occurrences, consumed);
+                    }
+                }
+            } else if (shape instanceof XSLFTextShape textShape) {
+                replace(textShape, replacements, occurrences, consumed);
+            }
+        }
+        return consumed;
+    }
+
+    private static String tokenKey(String key, int occurrenceIndex) {
+        return key + "#" + occurrenceIndex;
+    }
+
+    private static void replace(
+            XSLFTextShape shape,
+            Map<String, String> replacements,
+            Map<String, Integer> occurrences,
+            Set<String> consumed) {
         for (XSLFTextParagraph paragraph : shape.getTextParagraphs()) {
             List<XSLFTextRun> runs = paragraph.getTextRuns();
             StringBuilder fullText = new StringBuilder();
@@ -45,8 +78,15 @@ final class PlaceholderTextStripper {
                 if (text != null) fullText.append(text);
             }
             boolean[] remove = new boolean[fullText.length()];
+            Map<Integer, String> insertions = new HashMap<>();
             Matcher matcher = PLACEHOLDER.matcher(fullText);
             while (matcher.find()) {
+                String key = matcher.group(1);
+                String occurrenceKey = tokenKey(key, occurrences.merge(key, 1, Integer::sum) - 1);
+                if (replacements.containsKey(occurrenceKey)) {
+                    insertions.put(matcher.start(), replacements.get(occurrenceKey));
+                    consumed.add(occurrenceKey);
+                }
                 for (int index = matcher.start(); index < matcher.end(); index++) remove[index] = true;
             }
             int globalIndex = 0;
@@ -55,9 +95,11 @@ final class PlaceholderTextStripper {
                 if (text == null) continue;
                 StringBuilder kept = new StringBuilder();
                 for (int index = 0; index < text.length(); index++) {
+                    String insertion = insertions.get(globalIndex);
+                    if (insertion != null) kept.append(insertion);
                     if (!remove[globalIndex++]) kept.append(text.charAt(index));
                 }
-                if (kept.length() != text.length()) run.setText(kept.toString());
+                if (!kept.toString().equals(text)) run.setText(kept.toString());
             }
         }
     }

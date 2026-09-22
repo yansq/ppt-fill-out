@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.reportplatform.ppt.model.RenderFormat;
 import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
+import com.reportplatform.ppt.model.DraftPreviewRequest;
+import com.reportplatform.ppt.model.DraftPreviewValue;
 import com.reportplatform.ppt.model.StaticPreviewRequest;
 import com.reportplatform.ppt.storage.StoragePathResolver;
 import com.reportplatform.ppt.storage.StorageProperties;
@@ -16,6 +18,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
@@ -76,6 +79,25 @@ class PptRenderServiceTest {
                 new StoragePathResolver(new StorageProperties(storageRoot)), executable);
         byte[] preview = service.renderStaticPreview(new StaticPreviewRequest(
                 "templates/" + templateId + "/fixture.pptx", originalHash, 0));
+
+        assertThat(preview.length).isGreaterThan(1000);
+        assertThat(sha256(templatePath)).isEqualTo(originalHash);
+    }
+
+    @Test
+    void rendersFilledDraftWithoutMutatingTemplate() throws Exception {
+        String templateId = "d0d448d4-6c31-467e-9482-0df07baa7128";
+        Path templatePath = storageRoot.resolve("templates").resolve(templateId).resolve("fixture.pptx");
+        Files.createDirectories(templatePath.getParent());
+        createFixture(templatePath);
+        String originalHash = sha256(templatePath);
+        String executable = System.getenv().getOrDefault("LIBREOFFICE_EXECUTABLE", "soffice");
+        Assumptions.assumeTrue(isExecutableAvailable(executable), "LibreOffice is unavailable");
+        PptRenderService service = new PptRenderService(
+                new StoragePathResolver(new StorageProperties(storageRoot)), executable);
+        byte[] preview = service.renderDraftPreview(new DraftPreviewRequest(
+                "templates/" + templateId + "/fixture.pptx", originalHash, 0,
+                List.of(new DraftPreviewValue("report_month", 0, "2026-09"))));
 
         assertThat(preview.length).isGreaterThan(1000);
         assertThat(sha256(templatePath)).isEqualTo(originalHash);

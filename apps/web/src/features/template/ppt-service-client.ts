@@ -157,8 +157,21 @@ export async function renderStaticPreview(params: {
   sha256: string;
   slideIndex: number;
 }): Promise<Buffer> {
+  return renderPngPreview("/ppt/render-static", params);
+}
+
+export async function renderDraftPreview(params: {
+  relativePath: string;
+  sha256: string;
+  slideIndex: number;
+  values: { key: string; occurrenceIndex: number; valueText: string }[];
+}): Promise<Buffer> {
+  return renderPngPreview("/ppt/render-draft", params);
+}
+
+async function renderPngPreview(endpoint: string, params: object): Promise<Buffer> {
   const { serviceUrl, apiKey } = serviceConfiguration();
-  const response = await fetch(new URL("/ppt/render-static", serviceUrl), {
+  const response = await fetch(new URL(endpoint, serviceUrl), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -169,7 +182,7 @@ export async function renderStaticPreview(params: {
     signal: AbortSignal.timeout(120_000)
   });
   if (!response.ok || !response.headers.get("content-type")?.startsWith("image/png")) {
-    throw new Error(`PPT Service static preview failed (${response.status})`);
+    throw new Error(`PPT Service preview failed (${response.status})`);
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length < 8 || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {

@@ -98,7 +98,7 @@ docs/
 
 ## 6. 快速预览
 
-P4 已由 PPT Service 从不可变模板临时副本移除 `{{key}}` 文字、渲染去字静态页背景图，Web 按占位符几何叠加 DOM 草稿值；原始 PPTX 与常规缩略图不变。Fast Preview 只用于编辑反馈，P6 Real Preview 才是最终版式依据。跨 Run 文本处理及跨库镜像补偿见 ADR-0010。
+P4 起初由 PPT Service 从不可变模板临时副本移除 `{{key}}` 并渲染静态背景，Web 依据文本框几何叠加 DOM 草稿值。此方法在同一文本框含多段落时会错位。现由 PPT Service 按 `(key, occurrenceIndex)` 把已保存值替换到原始 TextRun 位置，再渲染当前页 PNG；原始 PPTX 与常规缩略图不变。草稿预览只用于编辑反馈，P6 的 FinalValue 真实预览和导出仍须单独验收。详见 ADR-0010、ADR-0012。
 
 ## 7. 安全边界
 

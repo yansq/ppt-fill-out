@@ -24,14 +24,13 @@ type EditorInstance = {
   version: number;
   editable: boolean;
   previewUrl: string;
-  staticPreviewUrl: string;
+  draftPreviewUrl: string;
   task: { reportPeriod: string };
   placeholders: {
     id: string;
     key: string;
     occurrenceIndex: number;
     originalText: string;
-    geometry: { left: number; top: number; width: number; height: number };
   }[];
   bindings: {
     placeholderId: string;
@@ -131,18 +130,9 @@ export function FillInEditor({ initialInstance }: { initialInstance: EditorInsta
 
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-lg border bg-card p-5">
-        <h2 className="mb-4 text-lg font-semibold">快速预览</h2>
-        <div className="relative overflow-hidden rounded border">
-          <Image alt="模板页去字静态背景" className="h-auto w-full" height={540} src={instance.staticPreviewUrl} unoptimized width={960} />
-          {instance.placeholders.map((placeholder) => {
-            const value = bindingValue(instance.bindings.find((binding) => binding.placeholderId === placeholder.id));
-            return value ? <div className="fast-preview-field absolute overflow-hidden text-xs text-foreground" key={placeholder.id} style={{
-              "--field-left": `${placeholder.geometry.left}%`, "--field-top": `${placeholder.geometry.top}%`,
-              "--field-width": `${placeholder.geometry.width}%`, "--field-height": `${placeholder.geometry.height}%`
-            } as React.CSSProperties}>{value}</div> : null;
-          })}
-        </div>
-        <p className="mt-3 text-sm">此图仅辅助编辑；最终字体、换行和版式以 P6 真实预览为准。</p>
+        <h2 className="mb-4 text-lg font-semibold">草稿预览</h2>
+        <Image alt="按照 PPT 原生文本位置渲染的草稿预览" className="h-auto w-full rounded border" height={540} src={instance.draftPreviewUrl} unoptimized width={960} />
+        <p className="mt-3 text-sm">保存草稿后重新渲染当前页面；字体和换行以 PPT 服务的渲染环境为准，最终导出仍以 P6 真实预览验收。</p>
       </section>
       <section className="rounded-lg border bg-card p-5">
         <h2 className="mb-4 text-lg font-semibold">占位符草稿</h2>

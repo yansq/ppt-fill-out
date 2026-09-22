@@ -9,7 +9,7 @@ P4 的白色遮盖层会破坏彩色背景，外部指标库与平台库也不�
 
 ## 决策
 
-1. PPT Service 对已校验哈希的不可变模板制作内存副本，按文本段落和 TextRun 跨段匹配移除 `{{key}}` 标记，再经 LibreOffice/PDFBox 渲染单页 PNG。原始模板和常规缩略图不修改。Web 仅向原本有模板访问权的登录用户提供私有缓存图片，DOM 在其上叠加草稿值。Fast Preview 仍不承诺与最终 PowerPoint 完全一致。
+1. PPT Service 对已校验哈希的不可变模板制作内存副本，按文本段落和 TextRun 跨段匹配移除 `{{key}}` 标记，再经 LibreOffice/PDFBox 渲染单页 PNG。原始模板和常规缩略图不修改。原方案通过 DOM 叠加草稿值；该方案在长文本框中错位，已由 ADR-0012 的 PPT 原生草稿渲染取代。
 2. 外部 `metric_record` 及同库 `metric_record_change` 是权威记录。平台 `MetricValue` 和 `MetricValueHistory` 为可补偿镜像。修改后先查询外部来源版本及有序变更，确认版本连续，再用系统库事务和版本条件更新缓存、逐条补记历史与审计。更新源库成功但镜像失败返回 `SYNC_PENDING`，Collector 可调用显式对账接口；重复对账幂等。历史有缺口时停止自动修复，避免凭当前值伪造审计。
 3. 企业真实指标库仍需独立的受控 Adapter/映射，不开放用户自定义 SQL。Docker Compose 的当前阶段复验按用户要求推迟至交付阶段。
 

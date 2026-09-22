@@ -3,6 +3,7 @@ package com.reportplatform.ppt.renderer;
 import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
 import com.reportplatform.ppt.model.RenderedFileMetadata;
+import com.reportplatform.ppt.model.DraftPreviewRequest;
 import com.reportplatform.ppt.model.StaticPreviewRequest;
 import java.io.ByteArrayOutputStream;
 import com.reportplatform.ppt.storage.StoragePathResolver;
@@ -23,6 +24,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
@@ -75,31 +77,44 @@ public class PptRenderService {
     }
 
     public byte[] renderStaticPreview(StaticPreviewRequest request) {
-        Path templatePath = pathResolver.resolveTemplate(request.relativePath());
+        return renderTransientPreview(request.relativePath(), request.sha256(), request.slideIndex(), PlaceholderTextStripper::strip);
+    }
+
+    public byte[] renderDraftPreview(DraftPreviewRequest request) {
+        return renderTransientPreview(request.relativePath(), request.sha256(), request.slideIndex(),
+                show -> PlaceholderTextStripper.fill(show, request.slideIndex(), request.values()));
+    }
+
+    private byte[] renderTransientPreview(
+            String relativePath,
+            String sha256,
+            int slideIndex,
+            Consumer<XMLSlideShow> transform) {
+        Path templatePath = pathResolver.resolveTemplate(relativePath);
         if (!Files.isRegularFile(templatePath) || !Files.isReadable(templatePath)) {
             throw new PptRenderException("Template file is not available");
         }
-        verifyHash(templatePath, request.sha256());
+        verifyHash(templatePath, sha256);
         Path workingDirectory = pathResolver.createRenderTempDirectory(UUID.randomUUID().toString());
         try {
             Files.createDirectories(workingDirectory);
             Path strippedPath = workingDirectory.resolve("static-preview.pptx");
             try (InputStream input = Files.newInputStream(templatePath);
                     XMLSlideShow show = new XMLSlideShow(input)) {
-                if (request.slideIndex() >= show.getSlides().size()) {
+                if (slideIndex >= show.getSlides().size()) {
                     throw new PptRenderException("Slide index is out of bounds");
                 }
-                PlaceholderTextStripper.strip(show);
+                transform.accept(show);
                 try (var output = Files.newOutputStream(strippedPath)) {
                     show.write(output);
                 }
             }
             Path pdfPath = convertToPdf(strippedPath, workingDirectory);
             try (PDDocument document = Loader.loadPDF(pdfPath.toFile())) {
-                if (request.slideIndex() >= document.getNumberOfPages()) {
+                if (slideIndex >= document.getNumberOfPages()) {
                     throw new PptRenderException("Rendered slide index is out of bounds");
                 }
-                BufferedImage image = new PDFRenderer(document).renderImageWithDPI(request.slideIndex(), PREVIEW_DPI, ImageType.RGB);
+                BufferedImage image = new PDFRenderer(document).renderImageWithDPI(slideIndex, PREVIEW_DPI, ImageType.RGB);
                 try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
                     if (!ImageIO.write(image, "png", output)) {
                         throw new PptRenderException("PNG image writer is unavailable");

@@ -2,7 +2,7 @@
 
 基于固定 `.pptx` 模板，通过结构化指标、人工填报、字段绑定、AI 文本辅助与 Apache POI，稳定生成尽量保持模板格式不变的报告。
 
-当前 **P4 测试数据主链路已验证**，正在开发 **P5 审核与 FinalValue**。示例指标库、去字 Fast Preview、提交快照、多人审核与退回重提可在本地体验；企业真实指标库映射及容器复验尚未完成。
+当前 **P4 测试数据主链路已验证**，正在开发 **P5 审核与 FinalValue**。示例指标库、PPT 原生位置草稿预览、提交快照、多人审核与退回重提可在本地体验；企业真实指标库映射及容器复验尚未完成。
 
 ## 文档导航
 
@@ -22,6 +22,7 @@
 - [P4 示例指标与快照决策](docs/adr/0009-demo-metric-store-and-p4-snapshots.md)：测试库、绑定快照与跨库边界
 - [去字背景与镜像补偿决策](docs/adr/0010-static-preview-and-metric-reconciliation.md)：静态背景、源库历史对账
 - [P5 审核决策](docs/adr/0011-p5-review-revisions-and-final-value.md)：多人 revision、退回失效与 FinalValue
+- [草稿预览定位决策](docs/adr/0012-ppt-native-draft-preview.md)：原 TextRun 替换，修复长文本框错位
 
 ## 目标技术栈
 
@@ -107,7 +108,7 @@ STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 - 我的填报：`GET /my-tasks`，只列出当前账号的 FillInstance
 - 指标数据源：`GET /data-sources`，仅 Collector 可创建 MySQL 指标源和测试连接
 - 指标管理：`GET /metrics`，Collector 按月查询、修改示例指标并查看原因/历史
-- 填报实例：`GET /fill-instances/{id}`，Filler 可切换指标查看月份、保存指标/人工绑定并提交本页；Fast Preview 使用去字静态背景，仅作编辑反馈
+- 填报实例：`GET /fill-instances/{id}`，Filler 可切换指标查看月份、保存指标/人工绑定并提交本页；草稿预览由 PPT Service 在原文本位置替换后渲染，保存后自动刷新
 - PPT liveness：`GET http://localhost:8080/actuator/health/liveness`
 - PPT readiness：`GET http://localhost:8080/actuator/health/readiness`
 

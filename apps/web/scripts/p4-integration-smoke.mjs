@@ -108,6 +108,15 @@ try {
     }, 200);
     version = result.instance.version;
   }
+  const draftPreviewPath = `/api/fill-instances/${instanceId}/draft-preview?version=${version}`;
+  const draftPreview = await fetch(`${baseUrl}${draftPreviewPath}`, { headers: { Cookie: filler } });
+  assert.equal(draftPreview.status, 200, "PPT-native draft preview unavailable");
+  assert.match(draftPreview.headers.get("content-type") ?? "", /image\/png/);
+  assert.ok((await draftPreview.arrayBuffer()).byteLength > 1000);
+  const blockedDraft = await fetch(`${baseUrl}${draftPreviewPath}`, { headers: { Cookie: outsider } });
+  assert.equal(blockedDraft.status, 404, "other filler must not read draft preview");
+  const staleDraft = await fetch(`${baseUrl}/api/fill-instances/${instanceId}/draft-preview?version=${version - 1}`, { headers: { Cookie: filler } });
+  assert.equal(staleDraft.status, 409, "stale draft preview must not mix versions");
   await api(outsider, "POST", `/api/fill-instances/${instanceId}/submit`, { expectedVersion: version }, 404);
   await api(filler, "POST", `/api/fill-instances/${instanceId}/submit`, { expectedVersion: version }, 200);
   await api(filler, "PUT", `/api/fill-instances/${instanceId}/bindings/${slide.placeholders[0].id}`, {

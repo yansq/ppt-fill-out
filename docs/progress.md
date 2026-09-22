@@ -17,7 +17,7 @@
 | P1 Monorepo 可启动 | 已完成 | 100% | JS/Java/Prisma 构建与测试通过；双服务本地启动和健康端点已验证；Compose 配置有效 |
 | P2 模板解析 Vertical Slice | 已完成 | 100% | 真实 MySQL migration、PPTX 上传/解析、逐页 PNG、持久化、失败重试、审计及 Compose 持久化均已验证 |
 | P3 任务与页面分发 | 已完成 | 100% | 真实登录、ReportTask、同页多人分配、独立 FillInstance、进度、状态与资源授权均通过宿主机和 Compose 集成验证 |
-| P4 指标与填报 | 示例主链路已完成；企业适配待办 | 95% | 独立示例指标库、查询/修改/历史、绑定、人工草稿、去字 Fast Preview、提交快照及平台镜像补偿已通过真实账号冒烟；真实企业映射待接入，Compose 复验按要求后置 |
+| P4 指标与填报 | 示例主链路已完成；企业适配待办 | 95% | 独立示例指标库、查询/修改/历史、绑定、人工草稿、PPT 原位草稿预览、提交快照及平台镜像补偿已通过真实账号冒烟；真实企业映射待接入，Compose 复验按要求后置 |
 | P5 审核与 FinalValue | 进行中 | 85% | 多人最新 revision 聚合、一致/冲突/缺失、显式最终值、退回重提、乐观锁及完整性检查通过真实账号冒烟；浏览器交互与容器复验未完成 |
 | P6 生成与真实预览 | 待办 | 0% | 尚未开始 |
 | P7 AI、加固与交付 | 待办 | 0% | 尚未开始 |
@@ -204,6 +204,16 @@
 
 遗留：企业真实指标库的表结构、权限及受控映射尚未提供，示例 Adapter 不能直接上线；Compose/PPT 镜像复验按用户要求留到后期。P5 尚未做浏览器交互视觉回归，也未在企业内网多用户环境验证。Web/PPT Service 当前本机开发进程已用于上述冒烟，不等于可交付部署。
 
+### 2026-09-22 — P4 / 草稿预览错位修复
+
+- [x] 根据用户截图与实际模板数据库记录确认：`accuracy` 位于 shape 55 的第 3 段，原几何是整个长文本框而非字符位置；用该 anchor 定位 DOM 动态层导致错位。
+- [x] 按 ADR-0012 将草稿预览改为 PPT Service 在临时 PPTX 的原 TextRun 位置替换已保存值并渲染单页 PNG。支持跨 Run、同 key 多 occurrence 和表格；原模板文件不修改。
+- [x] Web 使用带 FillInstance 版本的私有草稿预览接口；保存绑定后更新图片 URL，移除旧 DOM 几何叠加层。他人访问 404，过期版本 409。
+
+验证：`pnpm verify` 全部通过：ESLint/@shadcn lint、TypeScript、Web 14 文件/44 tests、Java 12 tests、Next.js build、Java package 和 Prisma validate。实际用户 PPTX 第 3 页经新接口生成 1920×1080 PNG，人工检查 `12` 和 `1422.10` 均在原句占位符位置，固定元素保留。P4 本机真实账号冒烟通过草稿图片 HTTP 200、他人 404、旧版本 409；Web 和 PPT Service 本机 readiness 均正常。
+
+遗留：草稿每次保存后需重新进行 LibreOffice 转换；这是页面编辑反馈，P6 的最终报告预览与导出尚未实现。
+
 ## 进行中
 
 - P5 收尾：浏览器审核面板的实际交互、权限和异常状态回归；P4 企业库 Adapter 待拿到真实表结构后实现。
@@ -217,7 +227,7 @@
 ## 当前风险与待验证假设
 
 - LibreOffice 与 Microsoft PowerPoint 可能存在字体/换行差异；部署镜像需要固定字体集和 LibreOffice 版本。
-- Fast Preview 已改用去字静态背景，仍可能与最终 PPT/LibreOffice 的动态文本字体和换行不同；不可代替 P6 真实预览。
+- 草稿预览已改用 PPT 原生 TextRun 替换，仍可能与 Microsoft PowerPoint 的字体和换行不同；不可代替 P6 的最终报告预览。
 - 外部企业指标库的表结构与写权限尚未给出；当前 Adapter 只对独立示例库的固定 `metric_record` 表开放参数化查询和修改。
 - 外部源库与平台库无法共享事务；源库更新后平台镜像失败会报 `SYNC_PENDING`，当前提供 Collector 手动对账并要求源库版本历史连续，尚无后台自动重试任务。
 - 当前采用内置凭据身份源；若改接企业 OAuth/OIDC，应保持业务 User ID 与资源授权逻辑不变，并单独设计账户映射。

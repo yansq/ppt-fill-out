@@ -382,6 +382,7 @@ export async function getFillInstance(instanceId: string) {
     bindings: instance.bindings,
     previewUrl: `/api/templates/${instance.templateSlide.templateId}/slides/${instance.templateSlide.slideIndex}/preview`,
     staticPreviewUrl: `/api/templates/${instance.templateSlide.templateId}/slides/${instance.templateSlide.slideIndex}/static-preview`,
+    draftPreviewUrl: `/api/fill-instances/${instance.id}/draft-preview?version=${instance.version}`,
     returnReason: returnMetadata?.reason ?? null,
     editable: actor.roles.has("FILLER") && instance.assigneeId === actor.id
   };

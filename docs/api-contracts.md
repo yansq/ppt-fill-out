@@ -53,6 +53,8 @@ Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{defin
 
 P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`，返回已移除占位符文字的 PNG；模板访问权限与常规预览相同，响应为私有缓存。`POST /api/metrics/{definitionId}/reconcile` 接收 `{ period }`，只允许 Collector；它按源库连续版本历史补齐平台镜像，响应包含 `appliedChanges`，版本缺口返回 `SYNC_HISTORY_GAP`，无新变更时幂等返回 0。
 
+草稿预览改为 `GET /api/fill-instances/{id}/draft-preview?version={fillInstanceVersion}`，按实例权限读取已保存绑定值；版本不一致返回 409，他人实例返回 404。响应为 `image/png` 和 `private, no-store`，保存绑定后前端用新版本 URL 重新请求。
+
 P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名 Filler 分别对应独立 FillInstance；无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
 
 `POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前 Filler 的实例；他人的实例 ID 返回 404。
@@ -113,6 +115,10 @@ Web 保存每个 PNG 为 `StoredFile(PREVIEW)` 并关联 `TemplateSlide.previewF
 ### `POST /ppt/render-static`
 
 P4 内部请求包含已存模板的 `relativePath`、`sha256` 和零基 `slideIndex`，响应直接为 `image/png`。服务只在临时 PPTX 副本上移除占位符文字，原始文件保持不变；仍受内部 API Key 保护。
+
+### `POST /ppt/render-draft`
+
+请求包含已存模板的 `relativePath`、`sha256`、零基 `slideIndex` 和 `values: [{ key, occurrenceIndex, valueText }]`。PPT Service 在临时副本的原 TextRun 位置替换文字，验证所有给定 occurrence 确实存在，并返回该页 `image/png`；不接受客户端提供文件路径或未授权值，Web 负责实例授权与版本校验。
 
 ### `POST /ppt/generate`
 
