@@ -87,7 +87,7 @@ public class PptRenderService {
 
     public byte[] renderDraftPreview(DraftPreviewRequest request) {
         return renderTransientPreview(request.relativePath(), request.sha256(), request.slideIndex(),
-                show -> PlaceholderTextStripper.fill(show, request.slideIndex(), request.values()));
+                show -> PlaceholderTextStripper.fill(show, request.slideIndex(), request.values(), request.highlight()));
     }
 
     public GenerateResponse generate(GenerateRequest request) {
@@ -198,16 +198,21 @@ public class PptRenderService {
                     throw new PptRenderException("Slide index is out of bounds");
                 }
                 transform.accept(show);
+                for (int index = show.getSlides().size() - 1; index >= 0; index--) {
+                    if (index != slideIndex) {
+                        show.removeSlide(index);
+                    }
+                }
                 try (var output = Files.newOutputStream(strippedPath)) {
                     show.write(output);
                 }
             }
             Path pdfPath = convertToPdf(strippedPath, workingDirectory);
             try (PDDocument document = Loader.loadPDF(pdfPath.toFile())) {
-                if (slideIndex >= document.getNumberOfPages()) {
-                    throw new PptRenderException("Rendered slide index is out of bounds");
+                if (document.getNumberOfPages() != 1) {
+                    throw new PptRenderException("Transient preview must render exactly one slide");
                 }
-                BufferedImage image = new PDFRenderer(document).renderImageWithDPI(slideIndex, PREVIEW_DPI, ImageType.RGB);
+                BufferedImage image = new PDFRenderer(document).renderImageWithDPI(0, PREVIEW_DPI, ImageType.RGB);
                 try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
                     if (!ImageIO.write(image, "png", output)) {
                         throw new PptRenderException("PNG image writer is unavailable");

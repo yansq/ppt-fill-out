@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { instanceStatusText } from "@/components/status";
@@ -6,6 +5,7 @@ import { instanceStatusText } from "@/components/status";
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
 import { FillInEditor } from "@/features/fill-in/fill-in-editor";
 import { FillPageNavigation } from "@/features/fill-in/page-navigation";
+import { PptPreviewImage } from "@/features/fill-in/ppt-preview-image";
 import { getFillInstance, listMyTaskPages, ReportTaskError } from "@/features/report-task/report-task-service";
 import { StartInstanceButton } from "@/features/report-task/start-instance-button";
 
@@ -38,7 +38,7 @@ export default async function FillInstancePage({ params }: { params: Promise<{ i
       {navigation ? <FillPageNavigation navigation={navigation} /> : null}
       <section className="min-w-0 rounded-xl border bg-card p-4 xl:sticky xl:top-24">
         <h2 className="mb-3 text-lg font-semibold">模板页预览</h2>
-        <Image alt={`第 ${instance.slideIndex + 1} 页模板预览`} className="h-auto w-full rounded border" height={720} src={instance.previewUrl} unoptimized width={1280} />
+        <PptPreviewImage alt={`第 ${instance.slideIndex + 1} 页模板预览`} aspectRatio={instance.slideAspectRatio} key={instance.previewUrl} src={instance.previewUrl} />
       </section>
       <section className="min-w-0 rounded-xl border bg-card p-5">
         <h2 className="mb-4 text-lg font-semibold">占位符</h2>

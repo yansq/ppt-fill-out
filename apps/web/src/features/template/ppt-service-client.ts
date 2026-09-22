@@ -207,6 +207,7 @@ export async function renderDraftPreview(params: {
   sha256: string;
   slideIndex: number;
   values: { key: string; occurrenceIndex: number; valueText: string }[];
+  highlight?: { key: string; occurrenceIndex: number };
 }): Promise<Buffer> {
   return renderPngPreview("/ppt/render-draft", params);
 }

@@ -357,8 +357,7 @@ export async function getFillInstance(instanceId: string) {
           placeholders: {
             orderBy: [{ key: "asc" }, { occurrenceIndex: "asc" }],
             select: {
-              id: true, key: true, occurrenceIndex: true, originalText: true,
-              xEmu: true, yEmu: true, widthEmu: true, heightEmu: true
+              id: true, key: true, occurrenceIndex: true, originalText: true
             }
           }
         }
@@ -386,17 +385,12 @@ export async function getFillInstance(instanceId: string) {
     assignee: instance.assignee,
     task: { id: instance.task.id, name: instance.task.name, reportPeriod: instance.task.reportPeriod, status: instance.task.status },
     slideIndex: instance.templateSlide.slideIndex,
+    slideAspectRatio: Number(instance.templateSlide.widthEmu) / Number(instance.templateSlide.heightEmu),
     placeholders: instance.templateSlide.placeholders.map((placeholder) => ({
       id: placeholder.id,
       key: placeholder.key,
       occurrenceIndex: placeholder.occurrenceIndex,
-      originalText: placeholder.originalText,
-      geometry: {
-        left: Number(placeholder.xEmu) / Number(instance.templateSlide.widthEmu) * 100,
-        top: Number(placeholder.yEmu) / Number(instance.templateSlide.heightEmu) * 100,
-        width: Number(placeholder.widthEmu) / Number(instance.templateSlide.widthEmu) * 100,
-        height: Number(placeholder.heightEmu) / Number(instance.templateSlide.heightEmu) * 100
-      }
+      originalText: placeholder.originalText
     })),
     bindings: instance.bindings,
     previewUrl: `/api/templates/${instance.templateSlide.templateId}/slides/${instance.templateSlide.slideIndex}/preview`,

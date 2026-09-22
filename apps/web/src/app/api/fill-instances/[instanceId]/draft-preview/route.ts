@@ -9,12 +9,13 @@ export const runtime = "nodejs";
 export async function GET(request: Request, context: { params: Promise<{ instanceId: string }> }) {
   try {
     const { instanceId } = await context.params;
-    const rawVersion = new URL(request.url).searchParams.get("version");
+    const searchParams = new URL(request.url).searchParams;
+    const rawVersion = searchParams.get("version");
     const version = rawVersion === null ? NaN : Number(rawVersion);
     if (!Number.isSafeInteger(version) || version < 0) {
       return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "草稿版本无效" } }, { status: 400 });
     }
-    const preview = await getDraftPreview(instanceId, version);
+    const preview = await getDraftPreview(instanceId, version, searchParams.get("highlight"));
     return new NextResponse(new Uint8Array(preview.bytes), {
       headers: {
         "Content-Type": "image/png",

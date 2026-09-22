@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.reportplatform.ppt.model.DraftPreviewValue;
+import com.reportplatform.ppt.model.DraftPreviewHighlight;
 import com.reportplatform.ppt.model.GenerateValue;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFTable;
 import org.apache.poi.xslf.usermodel.XSLFTextBox;
 import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
+import org.openxmlformats.schemas.drawingml.x2006.main.CTRegularTextRun;
 import org.junit.jupiter.api.Test;
 
 class PlaceholderTextStripperTest {
@@ -64,6 +68,56 @@ class PlaceholderTextStripperTest {
             assertThatThrownBy(() -> PlaceholderTextStripper.fill(show, 0,
                     List.of(new DraftPreviewValue("accuracy", 1, "missing"))))
                     .isInstanceOf(PptRenderException.class);
+        }
+    }
+
+    @Test
+    void colorsOnlyTheSelectedValueEvenWhenItSharesARunWithOtherText() throws Exception {
+        byte[] bytes;
+        try (XMLSlideShow show = new XMLSlideShow()) {
+            XSLFTextBox box = show.createSlide().createTextBox();
+            box.setText("前文 {{first}} 中间 {{second}} 后文");
+            PlaceholderTextStripper.fill(show, 0, List.of(
+                    new DraftPreviewValue("first", 0, "一"),
+                    new DraftPreviewValue("second", 0, "二")),
+                    new DraftPreviewHighlight("second", 0));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            show.write(output);
+            bytes = output.toByteArray();
+        }
+        try (XMLSlideShow restored = new XMLSlideShow(new ByteArrayInputStream(bytes))) {
+            XSLFTextBox box = (XSLFTextBox) restored.getSlides().get(0).getShapes().get(0);
+            assertThat(box.getText()).isEqualTo("前文 一 中间 二 后文");
+            var runs = box.getTextParagraphs().get(0).getTextRuns();
+            assertThat(runs).anySatisfy(run -> {
+                assertThat(run.getRawText()).isEqualTo("二");
+                var color = ((CTRegularTextRun) run.getXmlObject()).getRPr().getSolidFill().getSrgbClr().getVal();
+                assertThat(color).containsExactly((byte) 0xD6, (byte) 0, (byte) 0x78);
+            });
+            assertThat(runs).filteredOn(run -> !run.getRawText().equals("二"))
+                    .allSatisfy(run -> {
+                        var xml = (CTRegularTextRun) run.getXmlObject();
+                        assertThat(xml.getRPr() == null || !xml.getRPr().isSetSolidFill()).isTrue();
+                    });
+        }
+    }
+
+    @Test
+    void displaysAnUnfilledSelectedPlaceholderWithoutChangingTheNormalPreview() throws Exception {
+        byte[] bytes;
+        try (XMLSlideShow show = new XMLSlideShow()) {
+            XSLFTextBox box = show.createSlide().createTextBox();
+            box.setText("前文 {{item}} 后文");
+            PlaceholderTextStripper.fill(show, 0, List.of(new DraftPreviewValue("item", 0, "")),
+                    new DraftPreviewHighlight("item", 0));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            show.write(output);
+            bytes = output.toByteArray();
+        }
+        try (XMLSlideShow restored = new XMLSlideShow(new ByteArrayInputStream(bytes))) {
+            XSLFTextBox box = (XSLFTextBox) restored.getSlides().get(0).getShapes().get(0);
+            assertThat(box.getText()).isEqualTo("前文 {{item}} 后文");
+            assertThat(box.getTextParagraphs().get(0).getXmlObject().xmlText()).contains("D60078");
         }
     }
 

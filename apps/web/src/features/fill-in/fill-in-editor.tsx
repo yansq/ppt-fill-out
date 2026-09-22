@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@report-platform/ui/button";
@@ -10,6 +9,7 @@ import {
   FillPageNavigation,
   type FillPageNavigationData,
 } from "./page-navigation";
+import { PptPreviewImage } from "./ppt-preview-image";
 
 type MetricOption = {
   definitionId: string;
@@ -31,6 +31,7 @@ type EditorInstance = {
   editable: boolean;
   previewUrl: string;
   draftPreviewUrl: string;
+  slideAspectRatio: number;
   task: { reportPeriod: string };
   placeholders: {
     id: string;
@@ -72,6 +73,23 @@ export function FillInEditor({
   const [message, setMessage] = useState("");
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [allPagesSubmitted, setAllPagesSubmitted] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const previewRef = useRef<HTMLElement>(null);
+
+  function locatePlaceholder(placeholderId: string) {
+    if (highlightedId === placeholderId) {
+      setHighlightedId(null);
+      return;
+    }
+    setHighlightedId(placeholderId);
+    const preview = previewRef.current;
+    if (preview) {
+      const bounds = preview.getBoundingClientRect();
+      if (bounds.bottom < 0 || bounds.top > window.innerHeight) {
+        preview.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }
 
   function markDirty(placeholderId: string) {
     setDirtyIds((previous) => new Set(previous).add(placeholderId));
@@ -163,6 +181,10 @@ export function FillInEditor({
     }
   }
 
+  const previewUrl = highlightedId
+    ? `${instance.draftPreviewUrl}&highlight=${encodeURIComponent(highlightedId)}`
+    : instance.draftPreviewUrl;
+
   return (
     <>
       {allPagesSubmitted ? (
@@ -177,15 +199,14 @@ export function FillInEditor({
             unsaved={dirtyIds.size > 0}
           />
         ) : null}
-        <section className="min-w-0 rounded-xl border bg-card p-4 xl:sticky xl:top-24">
+        <section className="min-w-0 rounded-xl border bg-card p-4 xl:sticky xl:top-24" ref={previewRef}>
           <h2 className="mb-3 text-lg font-semibold">PPT 页面预览</h2>
-          <Image
+          <PptPreviewImage
             alt="当前 PPT 页的填报草稿预览"
-            className="h-auto w-full rounded border"
-            height={720}
-            src={instance.draftPreviewUrl}
-            unoptimized
-            width={1280}
+            fallbackSrc={highlightedId ? instance.draftPreviewUrl : instance.previewUrl}
+            aspectRatio={instance.slideAspectRatio}
+            key={previewUrl}
+            src={previewUrl}
           />
         </section>
         <div className="min-w-0 space-y-5">
@@ -272,7 +293,9 @@ export function FillInEditor({
                   }
                   key={placeholder.id}
                   metrics={loadedPeriod === viewPeriod ? metrics : []}
+                  highlighted={highlightedId === placeholder.id}
                   onDirty={() => markDirty(placeholder.id)}
+                  onLocate={() => locatePlaceholder(placeholder.id)}
                   onSave={(payload) => save(placeholder.id, payload)}
                   placeholder={placeholder}
                   viewPeriod={viewPeriod}
@@ -353,7 +376,9 @@ function PlaceholderEditor({
   metrics,
   viewPeriod,
   busy,
+  highlighted,
   onDirty,
+  onLocate,
   onSave,
 }: {
   placeholder: EditorInstance["placeholders"][number];
@@ -361,7 +386,9 @@ function PlaceholderEditor({
   metrics: MetricOption[];
   viewPeriod: string;
   busy: boolean;
+  highlighted: boolean;
   onDirty: () => void;
+  onLocate: () => void;
   onSave: (payload: Record<string, unknown>) => void;
 }) {
   const [sourceType, setSourceType] = useState(
@@ -376,11 +403,16 @@ function PlaceholderEditor({
   const current = bindingValue(binding);
 
   return (
-    <div className="rounded-md border p-4 text-sm">
-      <p className="font-semibold">
-        <code>{`{{${placeholder.key}}}`}</code> #
-        {placeholder.occurrenceIndex + 1}
-      </p>
+    <div className={`rounded-md border p-4 text-sm ${highlighted ? "border-primary bg-accent/30" : ""}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">
+          <code>{`{{${placeholder.key}}}`}</code> #
+          {placeholder.occurrenceIndex + 1}
+        </p>
+        <Button aria-pressed={highlighted} onClick={onLocate} size="sm" type="button" variant="outline">
+          {highlighted ? "取消高亮" : "高亮文字"}
+        </Button>
+      </div>
       <p className="mt-1">
         当前草稿：{current || "未填写"}
         {binding?.metricPeriod ? ` · 指标月份 ${binding.metricPeriod}` : ""}

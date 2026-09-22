@@ -44,7 +44,7 @@ export function FillPageNavigation({ navigation, unsaved = false, pending = fals
         const active = page.id === navigation.currentId;
         const status = active ? currentStatus ?? page.status : page.status;
         const content = <>
-          <Image alt="" className="aspect-video w-full rounded border bg-white object-contain" height={144} loading="lazy" src={page.previewUrl} unoptimized width={256} />
+          <Image alt="" className="aspect-video w-full rounded border bg-white object-contain" decoding="async" fetchPriority="low" height={144} loading="lazy" src={page.previewUrl} unoptimized width={256} />
           <span className="mt-2 flex items-center justify-between gap-1 text-xs"><strong>第 {page.slideIndex + 1} 页</strong><span className="muted">{instanceStatusText[status] ?? "待处理"}</span></span>
         </>;
         const className = `block w-36 shrink-0 rounded-lg border-2 p-2 xl:w-full ${active ? "border-primary bg-accent" : "border-transparent hover:border-primary/40"}`;

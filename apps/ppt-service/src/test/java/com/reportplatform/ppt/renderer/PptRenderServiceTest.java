@@ -6,6 +6,7 @@ import com.reportplatform.ppt.model.RenderFormat;
 import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
 import com.reportplatform.ppt.model.DraftPreviewRequest;
+import com.reportplatform.ppt.model.DraftPreviewHighlight;
 import com.reportplatform.ppt.model.DraftPreviewValue;
 import com.reportplatform.ppt.model.GenerateRequest;
 import com.reportplatform.ppt.model.GenerateValue;
@@ -14,6 +15,7 @@ import com.reportplatform.ppt.storage.StoragePathResolver;
 import com.reportplatform.ppt.storage.StorageProperties;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,7 +82,7 @@ class PptRenderServiceTest {
         PptRenderService service = new PptRenderService(
                 new StoragePathResolver(new StorageProperties(storageRoot)), executable);
         byte[] preview = service.renderStaticPreview(new StaticPreviewRequest(
-                "templates/" + templateId + "/fixture.pptx", originalHash, 0));
+                "templates/" + templateId + "/fixture.pptx", originalHash, 1));
 
         assertThat(preview.length).isGreaterThan(1000);
         assertThat(sha256(templatePath)).isEqualTo(originalHash);
@@ -102,6 +104,37 @@ class PptRenderServiceTest {
                 List.of(new DraftPreviewValue("report_month", 0, "2026-09"))));
 
         assertThat(preview.length).isGreaterThan(1000);
+        assertThat(sha256(templatePath)).isEqualTo(originalHash);
+    }
+
+    @Test
+    void highlightsSelectedTextInRenderedDraft() throws Exception {
+        String templateId = "b199daab-3f0e-4a20-9042-b5cfa3b07ab3";
+        Path templatePath = storageRoot.resolve("templates").resolve(templateId).resolve("fixture.pptx");
+        Files.createDirectories(templatePath.getParent());
+        createFixture(templatePath);
+        String originalHash = sha256(templatePath);
+        String executable = System.getenv().getOrDefault("LIBREOFFICE_EXECUTABLE", "soffice");
+        Assumptions.assumeTrue(isExecutableAvailable(executable), "LibreOffice is unavailable");
+        PptRenderService service = new PptRenderService(
+                new StoragePathResolver(new StorageProperties(storageRoot)), executable);
+
+        byte[] preview = service.renderDraftPreview(new DraftPreviewRequest(
+                "templates/" + templateId + "/fixture.pptx", originalHash, 0,
+                List.of(new DraftPreviewValue("report_month", 0, "2026-09")),
+                new DraftPreviewHighlight("report_month", 0)));
+        var image = ImageIO.read(new ByteArrayInputStream(preview));
+        boolean hasMagentaText = false;
+        for (int y = 0; y < image.getHeight() && !hasMagentaText; y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int rgb = image.getRGB(x, y);
+                if (((rgb >> 16) & 0xff) > 130 && ((rgb >> 8) & 0xff) < 90 && (rgb & 0xff) > 50) {
+                    hasMagentaText = true;
+                    break;
+                }
+            }
+        }
+        assertThat(hasMagentaText).isTrue();
         assertThat(sha256(templatePath)).isEqualTo(originalHash);
     }
 

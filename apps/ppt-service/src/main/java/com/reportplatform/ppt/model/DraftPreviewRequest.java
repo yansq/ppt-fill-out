@@ -12,5 +12,10 @@ public record DraftPreviewRequest(
         @NotBlank String relativePath,
         @NotBlank @Pattern(regexp = "[0-9a-fA-F]{64}") String sha256,
         @Min(0) int slideIndex,
-        @NotNull @Size(max = 1000) List<@Valid DraftPreviewValue> values) {
+        @NotNull @Size(max = 1000) List<@Valid DraftPreviewValue> values,
+        @Valid DraftPreviewHighlight highlight) {
+
+    public DraftPreviewRequest(String relativePath, String sha256, int slideIndex, List<DraftPreviewValue> values) {
+        this(relativePath, sha256, slideIndex, values, null);
+    }
 }

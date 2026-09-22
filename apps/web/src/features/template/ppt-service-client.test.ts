@@ -86,12 +86,15 @@ describe("PPT Service client", () => {
     })));
     await expect(renderDraftPreview({
       relativePath: "templates/a/a.pptx", sha256: "0".repeat(64), slideIndex: 1,
-      values: [{ key: "accuracy", occurrenceIndex: 0, valueText: "95%" }]
+      values: [{ key: "accuracy", occurrenceIndex: 0, valueText: "95%" }],
+      highlight: { key: "accuracy", occurrenceIndex: 0 }
     })).resolves.toEqual(png);
     expect(fetch).toHaveBeenCalledWith(new URL("/ppt/render-draft", "http://ppt-service.test"), expect.objectContaining({
       method: "POST",
       body: expect.stringContaining('"valueText":"95%"')
     }));
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string).highlight)
+      .toEqual({ key: "accuracy", occurrenceIndex: 0 });
   });
 
   it("validates a complete generated artifact set", async () => {
