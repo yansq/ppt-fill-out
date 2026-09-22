@@ -71,14 +71,15 @@ try {
   }
 
   let review = await api(admin, "GET", `/api/report-tasks/${taskId}/review`, undefined, 200);
+  const assignedSlide = (current) => current.slides.find((item) => item.id === slide.id);
   assert.equal(review.task.status, "REVIEWING");
-  assert.equal(review.slides[0].placeholders[0].status, "CONFLICT");
+  assert.equal(assignedSlide(review).placeholders[0].status, "CONFLICT");
   const reviewPage = await fetch(`${baseUrl}/report-tasks/${taskId}`, { headers: { Cookie: admin } });
   assert.equal(reviewPage.status, 200, "review page did not render");
   assert.match(await reviewPage.text(), /多人提交审核/);
   await api(aaa, "GET", `/api/report-tasks/${taskId}/review`, undefined, 403);
   await api(admin, "POST", `/api/report-tasks/${taskId}/review`, { expectedVersion: review.task.version }, 409);
-  const firstPlaceholder = review.slides[0].placeholders[0];
+  const firstPlaceholder = assignedSlide(review).placeholders[0];
   review = await api(admin, "PUT", `/api/report-tasks/${taskId}/final-values/${firstPlaceholder.id}`, {
     expectedVersion: review.task.version, resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId: firstPlaceholder.submissions[0].id
   }, 200);
@@ -90,7 +91,7 @@ try {
     expectedVersion: review.task.version, reason: "请核对数据"
   }, 200);
   assert.equal(review.task.status, "FILLING");
-  assert.equal(review.slides[0].placeholders[0].finalValue, null);
+  assert.equal(assignedSlide(review).placeholders[0].finalValue, null);
   const returned = await prisma.fillInstance.findUniqueOrThrow({ where: { id: instance("bbb").id } });
   const returnedDetail = await api(bbb, "GET", `/api/fill-instances/${returned.id}`, undefined, 200);
   assert.equal(returnedDetail.instance.returnReason, "请核对数据");
@@ -103,15 +104,15 @@ try {
   await api(bbb, "POST", `/api/fill-instances/${returned.id}/submit`, { expectedVersion: fill.instance.version }, 200);
   review = await api(admin, "GET", `/api/report-tasks/${taskId}/review`, undefined, 200);
   assert.equal(review.task.status, "REVIEWING");
-  assert.equal(review.slides[0].placeholders[0].status, "CONSISTENT");
-  for (const placeholder of review.slides[0].placeholders) {
+  assert.equal(assignedSlide(review).placeholders[0].status, "CONSISTENT");
+  for (const placeholder of review.slides.flatMap((item) => item.placeholders)) {
     review = await api(admin, "PUT", `/api/report-tasks/${taskId}/final-values/${placeholder.id}`, {
       expectedVersion: review.task.version, resolutionType: "MANUAL", valueText: `最终-${placeholder.key}`
     }, 200);
   }
   review = await api(admin, "POST", `/api/report-tasks/${taskId}/review`, { expectedVersion: review.task.version }, 200);
   assert.equal(review.task.status, "COMPLETED");
-  assert.ok(review.slides[0].instances.every((item) => item.status === "REVIEWED"));
+  assert.ok(assignedSlide(review).instances.every((item) => item.status === "REVIEWED"));
   process.stdout.write("P5 smoke: aggregation, conflict, authorization, stale review, return/revision, final invalidation and completion passed.\n");
 } finally {
   if (taskId) await prisma.$transaction(async (tx) => {

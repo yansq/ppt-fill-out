@@ -44,6 +44,15 @@ public class StoragePathResolver {
         return resolveWithin("temp/render-" + operationId, "temp");
     }
 
+    public Path resolveGenerated(String generationId, String filename) {
+        if (!generationId.matches("[0-9a-fA-F-]{36}")
+                || !(filename.equals("report.pptx") || filename.equals("report.pdf")
+                        || filename.matches("slide-[1-9][0-9]*\\.png"))) {
+            throw new IllegalArgumentException("Invalid generated file path component");
+        }
+        return resolveWithin("generated/" + generationId + "/" + filename, "generated");
+    }
+
     public String relativePath(Path path) {
         Path normalized = path.toAbsolutePath().normalize();
         if (!normalized.startsWith(root)) {

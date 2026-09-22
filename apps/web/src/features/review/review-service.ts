@@ -26,7 +26,7 @@ export async function getReview(taskId: string) {
   const task = await ownedTask(taskId, actor.id);
   const [slides, instances, finals] = await Promise.all([
     prisma.templateSlide.findMany({
-      where: { templateId: task.templateId, assignments: { some: { taskId } } },
+      where: { templateId: task.templateId, OR: [{ placeholders: { some: {} } }, { assignments: { some: { taskId } } }] },
       orderBy: { slideIndex: "asc" },
       select: { id: true, slideIndex: true, placeholders: { orderBy: [{ key: "asc" }, { occurrenceIndex: "asc" }], select: { id: true, key: true, occurrenceIndex: true } } }
     }),
@@ -74,10 +74,10 @@ export async function decideFinalValue(taskId: string, placeholderId: string, in
     if (task.version !== decision.expectedVersion) conflict();
     if (task.status !== "REVIEWING") invalid("任务当前不可审核");
     const placeholder = await tx.templatePlaceholder.findFirst({
-      where: { id: placeholderId, slide: { templateId: task.templateId, assignments: { some: { taskId } } } },
+      where: { id: placeholderId, slide: { templateId: task.templateId } },
       select: { id: true, slideId: true }
     });
-    if (!placeholder) throw new ReportTaskError("NOT_FOUND", "占位符不属于该任务的已分配页面", 404);
+    if (!placeholder) throw new ReportTaskError("NOT_FOUND", "占位符不属于该任务模板", 404);
     let selected = null;
     if (decision.resolutionType === "SELECTED_SUBMISSION") {
       selected = await tx.submittedValue.findFirst({
@@ -152,10 +152,9 @@ export async function completeReview(taskId: string, input: unknown) {
     if (task.status !== "REVIEWING") invalid("任务当前不可完成审核");
     const instances = await tx.fillInstance.findMany({ where: { taskId }, select: { status: true, templateSlideId: true } });
     if (!instances.length || instances.some((instance) => instance.status !== "SUBMITTED" && instance.status !== "REVIEWED")) invalid("所有填报实例必须先提交");
-    const slideIds = [...new Set(instances.map((instance) => instance.templateSlideId))];
-    const required = await tx.templatePlaceholder.findMany({ where: { slideId: { in: slideIds } }, select: { id: true } });
+    const required = await tx.templatePlaceholder.findMany({ where: { slide: { templateId: task.templateId } }, select: { id: true } });
     const finalCount = await tx.finalValue.count({ where: { taskId, placeholderId: { in: required.map((value) => value.id) } } });
-    if (finalCount !== required.length) invalid("还有占位符未确定最终值");
+    if (finalCount !== required.length) invalid("模板还有占位符未确定最终值");
     const changed = await tx.reportTask.updateMany({ where: { id: taskId, status: "REVIEWING", version: parsed.expectedVersion }, data: { status: "COMPLETED", version: { increment: 1 } } });
     if (changed.count !== 1) conflict();
     await tx.fillInstance.updateMany({ where: { taskId, status: "SUBMITTED" }, data: { status: "REVIEWED", reviewedAt: new Date(), version: { increment: 1 } } });

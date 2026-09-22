@@ -53,7 +53,7 @@ export function CreateTaskForm({ templates }: { templates: TemplateOption[] }) {
           <option value="">选择模板</option>
           {templates.map((template) => (
             <option key={template.id} value={template.id}>
-              {template.name} v{template.version} · {template._count.slides} 页
+              {template.name} · 第 {template.version} 版 · {template._count.slides} 页
             </option>
           ))}
         </select>

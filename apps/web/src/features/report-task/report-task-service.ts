@@ -188,7 +188,7 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
       const task = await tx.reportTask.findFirst({
         where: { id: taskId, collectorId: actor.id },
         include: {
-          template: { select: { slides: { select: { id: true } } } },
+          template: { select: { slides: { select: { id: true, _count: { select: { placeholders: true } } } } } },
           assignments: {
             include: {
               fillInstance: {
@@ -214,7 +214,19 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
       if (parsed.assignments.some((assignment) => !slideIds.has(assignment.slideId))) {
         throw new ReportTaskError("VALIDATION_ERROR", "分配页面不属于当前模板", 400);
       }
-      const assigneeIds = [...new Set(parsed.assignments.map((assignment) => assignment.assigneeId))];
+      const existing = new Map(task.assignments.map((assignment) => [
+        assignmentKey(assignment.templateSlideId, assignment.assigneeId), assignment
+      ]));
+      const desired = new Map(parsed.assignments.map((assignment) => [
+        assignmentKey(assignment.slideId, assignment.assigneeId), assignment
+      ]));
+      const removals = [...existing].filter(([key]) => !desired.has(key));
+      const additions = [...desired].filter(([key]) => !existing.has(key));
+      const emptySlideIds = new Set(task.template.slides.filter((slide) => slide._count.placeholders === 0).map((slide) => slide.id));
+      if (additions.some(([, assignment]) => emptySlideIds.has(assignment.slideId))) {
+        throw new ReportTaskError("VALIDATION_ERROR", "没有占位符的页面无需分配填报人", 400);
+      }
+      const assigneeIds = [...new Set(additions.map(([, assignment]) => assignment.assigneeId))];
       const activeFillers = await tx.user.findMany({
         where: {
           id: { in: assigneeIds },
@@ -227,14 +239,6 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
         throw new ReportTaskError("VALIDATION_ERROR", "填报人不存在、被停用或缺少 Filler 角色", 400);
       }
 
-      const existing = new Map(task.assignments.map((assignment) => [
-        assignmentKey(assignment.templateSlideId, assignment.assigneeId), assignment
-      ]));
-      const desired = new Map(parsed.assignments.map((assignment) => [
-        assignmentKey(assignment.slideId, assignment.assigneeId), assignment
-      ]));
-      const removals = [...existing].filter(([key]) => !desired.has(key));
-      const additions = [...desired].filter(([key]) => !existing.has(key));
       if (removals.length === 0 && additions.length === 0) return;
 
       for (const [, assignment] of removals) {
@@ -313,6 +317,21 @@ export async function listMyFillInstances() {
     placeholderCount: instance.templateSlide._count.placeholders,
     previewUrl: `/api/templates/${instance.templateSlide.templateId}/slides/${instance.templateSlide.slideIndex}/preview`
   }));
+}
+
+export async function listMyTaskPages(taskId: string) {
+  const actor = await requireFiller();
+  const pages = await prisma.fillInstance.findMany({
+    where: { assigneeId: actor.id, taskId },
+    select: { id: true, status: true, templateSlide: { select: { slideIndex: true, templateId: true } } }
+  });
+  return pages.map((page) => ({
+    id: page.id,
+    status: page.status,
+    slideIndex: page.templateSlide.slideIndex,
+    previewUrl: `/api/templates/${page.templateSlide.templateId}/slides/${page.templateSlide.slideIndex}/preview`
+  }))
+    .sort((a, b) => a.slideIndex - b.slideIndex);
 }
 
 export async function getFillInstance(instanceId: string) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.reportplatform.ppt.model.DraftPreviewValue;
+import com.reportplatform.ppt.model.GenerateValue;
 import java.util.List;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFTable;
@@ -63,6 +64,28 @@ class PlaceholderTextStripperTest {
             assertThatThrownBy(() -> PlaceholderTextStripper.fill(show, 0,
                     List.of(new DraftPreviewValue("accuracy", 1, "missing"))))
                     .isInstanceOf(PptRenderException.class);
+        }
+    }
+
+    @Test
+    void fullGenerationRequiresEveryOccurrenceOnEverySlide() throws Exception {
+        try (XMLSlideShow show = new XMLSlideShow()) {
+            show.createSlide().createTextBox().setText("甲 {{key}} 乙 {{key}}");
+            show.createSlide().createTextBox().setText("表述 {{other}}");
+            assertThatThrownBy(() -> PlaceholderTextStripper.fillAll(show,
+                    List.of(new GenerateValue(0, "key", 0, "一"))))
+                    .isInstanceOf(PptRenderException.class)
+                    .hasMessageContaining("do not cover");
+        }
+        try (XMLSlideShow show = new XMLSlideShow()) {
+            show.createSlide().createTextBox().setText("甲 {{key}} 乙 {{key}}");
+            show.createSlide().createTextBox().setText("表述 {{other}}");
+            PlaceholderTextStripper.fillAll(show, List.of(
+                    new GenerateValue(0, "key", 0, "一"),
+                    new GenerateValue(0, "key", 1, "二"),
+                    new GenerateValue(1, "other", 0, "三")));
+            assertThat(show.getSlides().get(0).getShapes().get(0)).isInstanceOf(XSLFTextBox.class);
+            assertThat(((XSLFTextBox) show.getSlides().get(0).getShapes().get(0)).getText()).isEqualTo("甲 一 乙 二");
         }
     }
 }

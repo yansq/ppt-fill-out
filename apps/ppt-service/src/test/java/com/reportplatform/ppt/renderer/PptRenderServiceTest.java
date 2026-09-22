@@ -7,6 +7,8 @@ import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
 import com.reportplatform.ppt.model.DraftPreviewRequest;
 import com.reportplatform.ppt.model.DraftPreviewValue;
+import com.reportplatform.ppt.model.GenerateRequest;
+import com.reportplatform.ppt.model.GenerateValue;
 import com.reportplatform.ppt.model.StaticPreviewRequest;
 import com.reportplatform.ppt.storage.StoragePathResolver;
 import com.reportplatform.ppt.storage.StorageProperties;
@@ -100,6 +102,36 @@ class PptRenderServiceTest {
                 List.of(new DraftPreviewValue("report_month", 0, "2026-09"))));
 
         assertThat(preview.length).isGreaterThan(1000);
+        assertThat(sha256(templatePath)).isEqualTo(originalHash);
+    }
+
+    @Test
+    void generatesPptxPdfAndEveryPagePngWithoutMutatingTemplate() throws Exception {
+        String templateId = "25bdf113-d89f-4f8c-a02b-8394a6becc0d";
+        String generationId = "bd03a11b-6026-48c1-aa02-4666d6d4ee19";
+        Path templatePath = storageRoot.resolve("templates").resolve(templateId).resolve("fixture.pptx");
+        Files.createDirectories(templatePath.getParent());
+        createFixture(templatePath);
+        String originalHash = sha256(templatePath);
+        String executable = System.getenv().getOrDefault("LIBREOFFICE_EXECUTABLE", "soffice");
+        Assumptions.assumeTrue(isExecutableAvailable(executable), "LibreOffice is unavailable");
+        PptRenderService service = new PptRenderService(
+                new StoragePathResolver(new StorageProperties(storageRoot)), executable);
+        var result = service.generate(new GenerateRequest(
+                "templates/" + templateId + "/fixture.pptx", originalHash, generationId,
+                List.of(new GenerateValue(0, "report_month", 0, "2026-09"))));
+
+        assertThat(result.pageCount()).isEqualTo(2);
+        assertThat(result.files()).extracting(file -> file.type()).containsExactly("PPTX", "PDF", "PNG", "PNG");
+        for (var file : result.files()) {
+            Path output = storageRoot.resolve(file.relativePath());
+            assertThat(output).isRegularFile();
+            assertThat(file.sha256()).isEqualTo(sha256(output));
+        }
+        try (XMLSlideShow generated = new XMLSlideShow(Files.newInputStream(storageRoot.resolve(result.files().get(0).relativePath())))) {
+            assertThat(((XSLFTextBox) generated.getSlides().get(0).getShapes().get(0)).getText())
+                    .contains("2026-09").doesNotContain("{{report_month}}");
+        }
         assertThat(sha256(templatePath)).isEqualTo(originalHash);
     }
 

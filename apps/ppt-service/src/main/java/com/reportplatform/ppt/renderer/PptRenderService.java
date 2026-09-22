@@ -4,6 +4,9 @@ import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
 import com.reportplatform.ppt.model.RenderedFileMetadata;
 import com.reportplatform.ppt.model.DraftPreviewRequest;
+import com.reportplatform.ppt.model.GenerateRequest;
+import com.reportplatform.ppt.model.GenerateResponse;
+import com.reportplatform.ppt.model.GeneratedArtifact;
 import com.reportplatform.ppt.model.StaticPreviewRequest;
 import java.io.ByteArrayOutputStream;
 import com.reportplatform.ppt.storage.StoragePathResolver;
@@ -34,6 +37,8 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFShape;
+import org.apache.poi.xslf.usermodel.XSLFTextShape;
 
 @Service
 public class PptRenderService {
@@ -83,6 +88,94 @@ public class PptRenderService {
     public byte[] renderDraftPreview(DraftPreviewRequest request) {
         return renderTransientPreview(request.relativePath(), request.sha256(), request.slideIndex(),
                 show -> PlaceholderTextStripper.fill(show, request.slideIndex(), request.values()));
+    }
+
+    public GenerateResponse generate(GenerateRequest request) {
+        Path templatePath = pathResolver.resolveTemplate(request.relativePath());
+        if (!Files.isRegularFile(templatePath) || !Files.isReadable(templatePath)) {
+            throw new PptRenderException("Template file is not available");
+        }
+        verifyHash(templatePath, request.sha256());
+        Path workingDirectory = pathResolver.createRenderTempDirectory(UUID.randomUUID().toString());
+        List<Path> committed = new ArrayList<>();
+        boolean succeeded = false;
+        try {
+            Files.createDirectories(workingDirectory);
+            Path pptxPath = workingDirectory.resolve("report.pptx");
+            List<String> warnings;
+            int pageCount;
+            try (InputStream input = Files.newInputStream(templatePath);
+                    XMLSlideShow show = new XMLSlideShow(input)) {
+                pageCount = show.getSlides().size();
+                List<String> baselineWarnings = collectLayoutWarnings(show);
+                PlaceholderTextStripper.fillAll(show, request.values());
+                warnings = collectLayoutWarnings(show);
+                warnings.removeAll(baselineWarnings);
+                try (var output = Files.newOutputStream(pptxPath)) {
+                    show.write(output);
+                }
+            }
+            Path pdfPath = convertToPdf(pptxPath, workingDirectory);
+            List<Path> outputs = new ArrayList<>(List.of(pptxPath, pdfPath));
+            try (PDDocument document = Loader.loadPDF(pdfPath.toFile())) {
+                if (document.getNumberOfPages() != pageCount) {
+                    throw new PptRenderException("Generated PDF page count differs from PPTX");
+                }
+                PDFRenderer renderer = new PDFRenderer(document);
+                for (int slideIndex = 0; slideIndex < pageCount; slideIndex++) {
+                    Path pngPath = workingDirectory.resolve("slide-" + (slideIndex + 1) + ".png");
+                    BufferedImage image = renderer.renderImageWithDPI(slideIndex, PREVIEW_DPI, ImageType.RGB);
+                    if (!ImageIO.write(image, "png", pngPath.toFile())) {
+                        throw new PptRenderException("PNG image writer is unavailable");
+                    }
+                    outputs.add(pngPath);
+                }
+            }
+            List<GeneratedArtifact> files = new ArrayList<>();
+            for (int index = 0; index < outputs.size(); index++) {
+                Path source = outputs.get(index);
+                Path destination = pathResolver.resolveGenerated(request.generationId(), source.getFileName().toString());
+                Files.createDirectories(destination.getParent());
+                Files.move(source, destination);
+                committed.add(destination);
+                String type = index == 0 ? "PPTX" : index == 1 ? "PDF" : "PNG";
+                String mimeType = index == 0
+                        ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                        : index == 1 ? "application/pdf" : "image/png";
+                files.add(new GeneratedArtifact(type, index >= 2 ? index - 2 : null,
+                        pathResolver.relativePath(destination), mimeType, Files.size(destination), sha256(destination)));
+            }
+            succeeded = true;
+            return new GenerateResponse(request.generationId(), pageCount, files, warnings);
+        } catch (IOException exception) {
+            throw new PptRenderException("Unable to generate report files", exception);
+        } finally {
+            if (!succeeded) {
+                for (Path file : committed) {
+                    try {
+                        Files.deleteIfExists(file);
+                    } catch (IOException ignored) {
+                        // Preserve the generation failure; P7 cleanup can reconcile orphan files.
+                    }
+                }
+            }
+            deleteRecursively(workingDirectory);
+        }
+    }
+
+    private List<String> collectLayoutWarnings(XMLSlideShow show) {
+        List<String> warnings = new ArrayList<>();
+        for (int slideIndex = 0; slideIndex < show.getSlides().size(); slideIndex++) {
+            for (XSLFShape shape : show.getSlides().get(slideIndex).getShapes()) {
+                if (shape instanceof XSLFTextShape textShape && shape.getAnchor() != null
+                        && shape.getAnchor().getHeight() > 0
+                        && textShape.getTextHeight() > shape.getAnchor().getHeight() + 2) {
+                    warnings.add("POSSIBLE_TEXT_OVERFLOW slide=" + (slideIndex + 1)
+                            + " shape=" + shape.getShapeId());
+                }
+            }
+        }
+        return warnings;
     }
 
     private byte[] renderTransientPreview(

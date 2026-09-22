@@ -59,7 +59,11 @@ P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由�
 
 `POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前 Filler 的实例；他人的实例 ID 返回 404。
 
-P5 审核：`GET /api/report-tasks/{id}/review` 返回每页最新提交值、一致/冲突/缺失标识和当前 FinalValue，仅任务 Collector 可访问。`PUT /api/report-tasks/{id}/final-values/{placeholderId}` 接收 `{ expectedVersion, resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId }` 或 `{ expectedVersion, resolutionType: "MANUAL", valueText }`；版本是 ReportTask 版本，所选提交必须为本任务该占位符当前 revision。`POST /api/report-tasks/{id}/fill-instances/{instanceId}/return` 接收 `{ expectedVersion, reason }`，退回时清除同页 FinalValue；`POST /api/report-tasks/{id}/review` 接收 `{ expectedVersion }` 完成审核，要求全部实例已提交且所有已分配页占位符都有 FinalValue。状态或版本冲突返回 409。
+`POST /api/fill-instances/{id}/submit` 成功返回 `{ instance, allAssignedPagesSubmitted }`；布尔值只统计当前填报人在同一任务中负责的页面，`SUBMITTED` 与 `REVIEWED` 视为已完成。
+
+P5 审核：`GET /api/report-tasks/{id}/review` 返回每页最新提交值、一致/冲突/缺失标识和当前 FinalValue；未分配但含占位符的模板页也列入审核，可由 Collector 手工确定值。`PUT /api/report-tasks/{id}/final-values/{placeholderId}` 接收 `{ expectedVersion, resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId }` 或 `{ expectedVersion, resolutionType: "MANUAL", valueText }`；版本是 ReportTask 版本，所选提交必须为本任务该占位符当前 revision。`POST /api/report-tasks/{id}/fill-instances/{instanceId}/return` 接收 `{ expectedVersion, reason }`，退回时清除同页 FinalValue；`POST /api/report-tasks/{id}/review` 接收 `{ expectedVersion }` 完成审核，要求全部实例已提交且**模板全部占位符**都有 FinalValue。状态或版本冲突返回 409。
+
+P6 生成：`GET /api/report-tasks/{id}/generate` 返回任务状态/版本及已完成文件列表（PPTX、PDF、逐页 PNG，包含 SHA-256、大小、预览 URL、版式警告）。`POST /api/report-tasks/{id}/generate` 接收 `{ expectedVersion, idempotencyKey: UUID }`；仅任务 Collector 且任务为 `COMPLETED`/`EXPORTED` 可调用。相同键重试返回已完成结果，进行中/失败的键不可复用；缺少 FinalValue 返回 `MISSING_FINAL_VALUES`。生成前持久化 FinalValue、模板 SHA-256 和任务版本快照，输出与指标库后续变化无关。`POST /api/report-tasks/{id}/exports` 接收 `{ generatedFileId }`，仅对本任务已完成 PPTX/PDF 返回 `{ downloadUrl }` 并写导出审计，首次导出使任务进入 `EXPORTED`。`GET /api/files/{fileId}` 校验任务归属、文件大小和 SHA-256；PNG/PDF 默认行内预览，`?download=1` 下载，PPTX 总是下载。
 
 ### 上传模板的最小响应
 
@@ -126,16 +130,16 @@ P4 内部请求包含已存模板的 `relativePath`、`sha256` 和零基 `slideI
 
 ```json
 {
-  "templateFile": { "fileId": "...", "relativePath": "templates/...pptx", "sha256": "..." },
+  "relativePath": "templates/{templateId}/template.pptx",
+  "sha256": "64位十六进制SHA-256",
+  "generationId": "UUID",
   "values": [
-    { "placeholderKey": "people_number", "value": "128" }
-  ],
-  "outputRelativePath": "generated/.../report.pptx",
-  "idempotencyKey": "..."
+    { "slideIndex": 1, "key": "people_number", "occurrenceIndex": 0, "valueText": "128" }
+  ]
 }
 ```
 
-响应返回生成文件元数据、未解析 key、未提供 key、重复 occurrence 数量和 layout warnings。服务不得接受或推断用户权限。
+PPT Service 严格核对每个 `(slideIndex,key,occurrenceIndex)` 是否存在且恰好提供一次；缺失或多余值均失败。原 PPTX 不修改，仅允许输出到 `generated/{generationId}/report.pptx`、`report.pdf` 和 `slide-{n}.png`。响应包含 `generationId`、`pageCount`、`files[]`（type、零基 slideIndex、relativePath、mimeType、sizeBytes、sha256）及相对于原模板新增的 `warnings[]`。权限、业务幂等和快照由 Web 处理，不由 PPT Service 推断。
 
 ## 4. MetricDataSource 接口
 

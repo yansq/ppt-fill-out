@@ -1,10 +1,9 @@
-import Link from "next/link";
+import { WorkspaceShell } from "@/components/workspace-shell";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
-import { Button } from "@report-platform/ui/button";
-
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
+import { templateStatusText } from "@/components/status";
 import { listTemplates } from "@/features/template/template-service";
 import { TemplateUploadForm } from "@/features/template/template-upload-form";
 import { TemplateRetryButton } from "@/features/template/template-retry-button";
@@ -16,7 +15,7 @@ export default async function TemplatesPage() {
   try {
     actor = await currentActor();
   } catch (error) {
-    if (error instanceof AuthorizationError) redirect("/api/auth/signin?callbackUrl=/templates");
+    if (error instanceof AuthorizationError) redirect("/login?callbackUrl=/templates");
     throw error;
   }
   let templates: Awaited<ReturnType<typeof listTemplates>> = [];
@@ -28,30 +27,25 @@ export default async function TemplatesPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-8 py-12">
-      <header className="mb-10 flex items-start justify-between gap-6">
+    <WorkspaceShell collector={actor.roles.has("COLLECTOR")} filler={actor.roles.has("FILLER")} section="templates" username={actor.username}><main className="page-container">
+      <header className="page-heading">
         <div>
-          <p className="mb-2 text-sm font-medium text-primary">P2 · 模板解析</p>
+          <p className="eyebrow">收集人 · 模板管理</p>
           <h1 className="text-3xl font-semibold tracking-tight">PPT 模板</h1>
           <p className="mt-3 max-w-3xl leading-7">
-            上传固定格式的 PPTX。系统会校验文件、识别普通文本和表格中的业务占位符，并保存页面与定位信息。
+            上传演示文稿，确认页面和填写位置。可用模板可直接用于创建报告任务。
           </p>
-        </div>
-        <div className="flex gap-2">
-          {actor.roles.has("COLLECTOR") ? <Button asChild variant="outline"><Link href="/report-tasks">报告任务</Link></Button> : null}
-          <Button asChild variant="outline"><Link href="/">返回首页</Link></Button>
-          <Button asChild variant="outline"><Link href="/api/auth/signout">退出登录</Link></Button>
         </div>
       </header>
 
-      {actor.roles.has("COLLECTOR") ? <section className="rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
+      {actor.roles.has("COLLECTOR") ? <section className="surface" id="upload">
         <h2 className="text-lg font-semibold">上传模板</h2>
-        <p className="mb-6 mt-1 text-sm">首版占位符格式为 {"{{placeholder_key}}"}，支持跨 TextRun 和 Table Cell。</p>
+        <p className="mb-6 mt-1 text-sm muted">在需要填写的位置使用 {"{{名称}}"} 标记。上传后请检查下方的页面预览。</p>
         {databaseAvailable ? (
           <TemplateUploadForm />
         ) : (
           <p className="rounded-md border bg-background p-4 text-sm">
-            系统数据库当前不可用。请检查 DATABASE_URL 和 migration 状态后重试。
+            模板服务暂时不可用，请稍后重试或联系管理员。
           </p>
         )}
       </section> : null}
@@ -70,10 +64,10 @@ export default async function TemplatesPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-semibold">
-                      {template.name} <span className="text-sm font-normal">v{template.version}</span>
+                      {template.name} <span className="text-sm font-normal">第 {template.version} 版</span>
                     </h3>
                     <p className="mt-1 text-sm">
-                      {template.originalFilename} · {template.status} · Parser {template.parserVersion ?? "-"}
+                      {template.originalFilename} · {templateStatusText[template.status] ?? "待处理"}
                     </p>
                   </div>
                   <span className="text-sm">{template.slides.length} 页</span>
@@ -107,7 +101,7 @@ export default async function TemplatesPage() {
                           {slide.placeholders.map((placeholder) => (
                             <li className="rounded-md border px-3 py-2 text-sm" key={placeholder.id}>
                               <code>{`{{${placeholder.key}}}`}</code>
-                              <span className="ml-2">{placeholder.containerType}</span>
+                              <span className="ml-2 muted">需要填写</span>
                             </li>
                           ))}
                         </ul>
@@ -120,6 +114,6 @@ export default async function TemplatesPage() {
           </div>
         )}
       </section>
-    </main>
+    </main></WorkspaceShell>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseTemplate, renderDraftPreview, renderStaticPreview, renderTemplate } from "./ppt-service-client";
+import { generateReport, parseTemplate, renderDraftPreview, renderStaticPreview, renderTemplate } from "./ppt-service-client";
 
 const originalEnvironment = { ...process.env };
 
@@ -92,5 +92,25 @@ describe("PPT Service client", () => {
       method: "POST",
       body: expect.stringContaining('"valueText":"95%"')
     }));
+  });
+
+  it("validates a complete generated artifact set", async () => {
+    const generationId = "0476e23a-2145-47d4-a708-36cf46b006f9";
+    const metadata = (type: string, name: string, slideIndex: number | null) => ({
+      type, slideIndex, relativePath: `generated/${generationId}/${name}`,
+      mimeType: type === "PPTX" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        : type === "PDF" ? "application/pdf" : "image/png",
+      sizeBytes: 10, sha256: "a".repeat(64)
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      generationId, pageCount: 1, warnings: [], files: [
+        metadata("PPTX", "report.pptx", null), metadata("PDF", "report.pdf", null),
+        metadata("PNG", "slide-1.png", 0)
+      ]
+    })));
+    await expect(generateReport({
+      relativePath: "templates/a/a.pptx", sha256: "0".repeat(64), generationId,
+      values: [{ slideIndex: 0, key: "total", occurrenceIndex: 0, valueText: "128" }]
+    })).resolves.toMatchObject({ pageCount: 1 });
   });
 });

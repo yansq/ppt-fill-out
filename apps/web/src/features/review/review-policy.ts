@@ -9,6 +9,6 @@ export const returnSchema = z.object({ expectedVersion: z.number().int().min(0),
 export const completeSchema = z.object({ expectedVersion: z.number().int().min(0) });
 
 export function submissionStatus(values: string[], expectedCount: number) {
-  if (values.length < expectedCount) return "MISSING" as const;
+  if (expectedCount === 0 || values.length < expectedCount) return "MISSING" as const;
   return new Set(values).size === 1 ? "CONSISTENT" as const : "CONFLICT" as const;
 }

@@ -2,7 +2,7 @@
 
 基于固定 `.pptx` 模板，通过结构化指标、人工填报、字段绑定、AI 文本辅助与 Apache POI，稳定生成尽量保持模板格式不变的报告。
 
-当前 **P4 测试数据主链路已验证**，正在开发 **P5 审核与 FinalValue**。示例指标库、PPT 原生位置草稿预览、提交快照、多人审核与退回重提可在本地体验；企业真实指标库映射及容器复验尚未完成。
+当前 **P6 生成与真实预览主链路已实现**：审核完成后从 FinalValue 快照生成 PPTX、PDF 和逐页 PNG，可在任务页查看真实预览并受控下载。示例指标库、提交快照及多人审核也可在本地体验；企业真实指标库映射、浏览器完整交互回归及容器复验尚未完成。
 
 ## 文档导航
 
@@ -23,6 +23,7 @@
 - [去字背景与镜像补偿决策](docs/adr/0010-static-preview-and-metric-reconciliation.md)：静态背景、源库历史对账
 - [P5 审核决策](docs/adr/0011-p5-review-revisions-and-final-value.md)：多人 revision、退回失效与 FinalValue
 - [草稿预览定位决策](docs/adr/0012-ppt-native-draft-preview.md)：原 TextRun 替换，修复长文本框错位
+- [P6 生成决策](docs/adr/0013-p6-final-snapshot-generation.md)：FinalValue 快照、幂等生成与受控导出
 
 ## 目标技术栈
 
@@ -63,7 +64,7 @@ pnpm --filter @report-platform/database seed:auth
 pnpm dev
 ```
 
-`seed:auth` 无额外变量时仅创建 Collector/Filler 角色。创建登录用户时，在该命令的进程环境中同时设置 `AUTH_SEED_USERNAME`、`AUTH_SEED_PASSWORD`（默认至少 12 位）和 `AUTH_SEED_ROLE=COLLECTOR|FILLER`；不要将密码写入仓库文件或 shell 历史。它会为现有同用户名用户设置/重置密码。仅在隔离测试环境显式设置 `AUTH_SEED_ALLOW_WEAK_PASSWORD=1` 时允许至少 6 位密码。登录入口为 `/api/auth/signin`，使用用户名和密码，无邮箱格式要求；当前没有自助注册。必须设置足够长且保密的 `AUTH_SECRET`。`AUTH_URL` 应指向浏览器实际访问的 HTTP 或 HTTPS 地址，不能包含账号密码。
+`seed:auth` 无额外变量时仅创建 Collector/Filler 角色。创建登录用户时，在该命令的进程环境中同时设置 `AUTH_SEED_USERNAME`、`AUTH_SEED_PASSWORD`（默认至少 12 位）和 `AUTH_SEED_ROLE=COLLECTOR|FILLER`；不要将密码写入仓库文件或 shell 历史。它会为现有同用户名用户设置/重置密码。仅在隔离测试环境显式设置 `AUTH_SEED_ALLOW_WEAK_PASSWORD=1` 时允许至少 6 位密码。登录入口为 `/login`，使用用户名和密码，无邮箱格式要求；当前没有自助注册。必须设置足够长且保密的 `AUTH_SECRET`。`AUTH_URL` 应指向浏览器实际访问的 HTTP 或 HTTPS 地址，不能包含账号密码。
 
 使用 `/data-sources` 前，还须设置 `ENCRYPTION_KEY` 为随机 32 字节密钥的 Base64 编码，例如在安全终端运行 `openssl rand -base64 32` 后将结果写入不纳入版本控制的部署密钥环境。所有运行中的 Web 实例必须使用同一密钥和 `ENCRYPTION_KEY_VERSION`。丢失密钥会导致既有数据源密码不可解密；不要直接更换版本或密钥，先按 ADR-0008 迁移密文。数据源表中只存加密凭据；浏览器到 Web 的无 HTTPS 流量仍须依赖内网隔离保护。
 
@@ -104,8 +105,8 @@ STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 - Web liveness：`GET /api/health/live`
 - Web readiness：`GET /api/health/ready`，关键配置或系统 MySQL 不可用时返回 503
 - 模板管理：`GET /templates`，须先登录；Collector 可上传，只有模板创建者或关联任务成员可读取
-- 报告任务：`GET /report-tasks`，Collector 创建任务、按页分配 Filler、查看进度并审核多人提交
-- 我的填报：`GET /my-tasks`，只列出当前账号的 FillInstance
+- 报告任务：`GET /report-tasks`，Collector 创建任务、按页分配 Filler、审核多人提交，完成后生成并预览/下载 PPTX 与 PDF
+- 我的填报：`GET /my-tasks`，按报告汇总当前账号获分配的页面，可进入具体 FillInstance 填写
 - 指标数据源：`GET /data-sources`，仅 Collector 可创建 MySQL 指标源和测试连接
 - 指标管理：`GET /metrics`，Collector 按月查询、修改示例指标并查看原因/历史
 - 填报实例：`GET /fill-instances/{id}`，Filler 可切换指标查看月份、保存指标/人工绑定并提交本页；草稿预览由 PPT Service 在原文本位置替换后渲染，保存后自动刷新

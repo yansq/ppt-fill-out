@@ -82,6 +82,22 @@ const renderResponseSchema = z.object({
 
 export type PptRenderResponse = z.infer<typeof renderResponseSchema>;
 
+const generateResponseSchema = z.object({
+  generationId: z.string().uuid(),
+  pageCount: z.number().int().positive(),
+  files: z.array(z.object({
+    type: z.enum(["PPTX", "PDF", "PNG"]),
+    slideIndex: z.number().int().nonnegative().nullable(),
+    relativePath: z.string().startsWith("generated/"),
+    mimeType: z.string().min(1),
+    sizeBytes: z.number().int().positive(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/)
+  })),
+  warnings: z.array(z.string())
+});
+
+export type PptGenerateResponse = z.infer<typeof generateResponseSchema>;
+
 function serviceConfiguration() {
   const serviceUrl = process.env.PPT_SERVICE_URL?.trim();
   const apiKey = process.env.PPT_SERVICE_API_KEY?.trim();
@@ -148,6 +164,32 @@ export async function renderTemplate(params: {
   const result = renderResponseSchema.parse(await response.json());
   if (result.fileId !== params.fileId || result.pageCount !== result.files.length) {
     throw new Error("PPT Service returned inconsistent preview metadata");
+  }
+  return result;
+}
+
+export async function generateReport(params: {
+  relativePath: string;
+  sha256: string;
+  generationId: string;
+  values: { slideIndex: number; key: string; occurrenceIndex: number; valueText: string }[];
+}): Promise<PptGenerateResponse> {
+  const { serviceUrl, apiKey } = serviceConfiguration();
+  const response = await fetch(new URL("/ppt/generate", serviceUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Internal-Api-Key": apiKey },
+    body: JSON.stringify(params),
+    cache: "no-store",
+    signal: AbortSignal.timeout(180_000)
+  });
+  if (!response.ok) {
+    throw new Error(`PPT Service generate failed (${response.status})`);
+  }
+  const result = generateResponseSchema.parse(await response.json());
+  if (result.generationId !== params.generationId || result.files.length !== result.pageCount + 2
+      || result.files[0]?.type !== "PPTX" || result.files[1]?.type !== "PDF"
+      || result.files.slice(2).some((file, index) => file.type !== "PNG" || file.slideIndex !== index)) {
+    throw new Error("PPT Service returned inconsistent generated files");
   }
   return result;
 }

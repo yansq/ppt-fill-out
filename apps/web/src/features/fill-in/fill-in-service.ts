@@ -83,7 +83,7 @@ export async function saveBinding(instanceId: string, placeholderId: string, inp
 export async function submitFillInstance(instanceId: string, input: unknown) {
   const actor = await requireFiller();
   const parsed = submitSchema.parse(input);
-  await prisma.$transaction(async (tx) => {
+  const allAssignedPagesSubmitted = await prisma.$transaction(async (tx) => {
     const instance = await tx.fillInstance.findFirst({
       where: { id: instanceId, assigneeId: actor.id },
       include: {
@@ -150,6 +150,10 @@ export async function submitFillInstance(instanceId: string, input: unknown) {
     if (remaining === 0) await tx.reportTask.updateMany({
       where: { id: instance.taskId, status: "FILLING" }, data: { status: "REVIEWING", version: { increment: 1 } }
     });
+    const myRemaining = await tx.fillInstance.count({
+      where: { taskId: instance.taskId, assigneeId: actor.id, status: { notIn: ["SUBMITTED", "REVIEWED"] } }
+    });
+    return myRemaining === 0;
   });
-  return getFillInstance(instanceId);
+  return { instance: await getFillInstance(instanceId), allAssignedPagesSubmitted };
 }

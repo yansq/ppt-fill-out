@@ -5,6 +5,7 @@ import { decisionSchema, submissionStatus } from "./review-policy";
 describe("review policy", () => {
   it("marks missing, consistent and conflicting submissions", () => {
     expect(submissionStatus([], 2)).toBe("MISSING");
+    expect(submissionStatus([], 0)).toBe("MISSING");
     expect(submissionStatus(["甲"], 2)).toBe("MISSING");
     expect(submissionStatus(["甲", "甲"], 2)).toBe("CONSISTENT");
     expect(submissionStatus(["甲", "乙"], 2)).toBe("CONFLICT");

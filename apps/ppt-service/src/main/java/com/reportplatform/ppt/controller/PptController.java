@@ -3,6 +3,8 @@ package com.reportplatform.ppt.controller;
 import com.reportplatform.ppt.model.ParseRequest;
 import com.reportplatform.ppt.model.ParseResponse;
 import com.reportplatform.ppt.model.DraftPreviewRequest;
+import com.reportplatform.ppt.model.GenerateRequest;
+import com.reportplatform.ppt.model.GenerateResponse;
 import com.reportplatform.ppt.model.RenderRequest;
 import com.reportplatform.ppt.model.RenderResponse;
 import com.reportplatform.ppt.model.StaticPreviewRequest;
@@ -46,5 +48,10 @@ public class PptController {
     @PostMapping(value = "/render-draft", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> renderDraft(@Valid @RequestBody DraftPreviewRequest request) {
         return ResponseEntity.ok(renderService.renderDraftPreview(request));
+    }
+
+    @PostMapping("/generate")
+    public ResponseEntity<GenerateResponse> generate(@Valid @RequestBody GenerateRequest request) {
+        return ResponseEntity.ok(renderService.generate(request));
     }
 }
