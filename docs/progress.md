@@ -406,7 +406,7 @@
 - [x] 从本机 `report_platform` 与 `report_metrics_demo` 导出一致性 SQL，从 `data` 目录导出模板、预览与生成文件。导出前修复 3 个缺失文件：源 PPTX 与已有同 SHA 模板相同，两个预览复用同源模板渲染图并更新文件摘要；53 条 StoredFile 记录的文件与大小/摘要全部一致。
 - [x] 编写目标为已有 MySQL 服务器的 [内网部署说明](intranet-deployment.md)，明确账号、密钥、指标源、验证、备份和测试数据限制。
 
-验证：`pnpm lint`、`pnpm typecheck`、Next.js build、Java `clean package`/tests、Prisma validate、Compose config 均通过；Web amd64 容器 `/api/health/live` 与连接真实本机 MySQL 的 `/api/health/ready` 均为 200，PPT amd64 容器 readiness 为 200。SQL 在临时空 MySQL 8.0.27 中导入成功，含 6 条迁移、12 条指标；重复导入被拒绝。重新加密脚本更新 1 个指标源，并用更新后凭据查询到 12 条指标。共享文件归档在临时 Docker 卷解包成功。镜像归档经 `docker load` 复验三张镜像标签。目标内网服务器、真实连接参数和断公网演练尚未验证。
+验证：`pnpm lint`、`pnpm typecheck`、Web 26 文件/78 项测试、Next.js build、Java `clean package`/tests、Prisma validate、Compose config 均通过；Web amd64 容器 `/api/health/live` 与连接真实本机 MySQL 的 `/api/health/ready` 均为 200，PPT amd64 容器 readiness 为 200。Compose `up -d --no-build --pull never` 后两服务均 healthy、Web readiness 为 200。SQL 在临时空 MySQL 8.0.27 中导入成功，27 张表与本机逐表行数一致，含 6 条迁移、12 条指标；重复导入被拒绝。重新加密脚本更新 1 个指标源，并用更新后凭据查询到 12 条指标。共享文件归档在临时 Docker 卷解包成功。镜像归档经 `docker load` 复验三张镜像标签。目标内网服务器、真实连接参数和断公网演练尚未验证。
 
 ## 进行中
 
