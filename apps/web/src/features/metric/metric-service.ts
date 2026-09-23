@@ -7,7 +7,7 @@ import { decryptPassword } from "@/features/data-source/credential";
 import { MetricAdapterError, MySqlMetricDataSource, type MetricRecord } from "@/features/data-source/mysql-adapter";
 import { getFillInstance } from "@/features/report-task/report-task-service";
 
-import { demoQueryConfigSchema, metricYearSchema, periodSchema, updateMetricSchema } from "./metric-policy";
+import { demoQueryConfigSchema, metricCatalogQuerySchema, metricYearSchema, periodSchema, updateMetricSchema } from "./metric-policy";
 import { hasContinuousHistory } from "./metric-sync-policy";
 
 export class MetricServiceError extends Error {
@@ -220,6 +220,69 @@ export async function queryMetricsForCollector(periodInput: unknown) {
   await requireCollector();
   const period = periodSchema.parse(periodInput);
   return { period, items: await queryAllMetrics(period) };
+}
+
+const CATALOG_PAGE_SIZE = 20;
+
+export async function listMetricCatalog(input: { period: unknown; page: unknown; search: unknown }) {
+  await requireCollector();
+  const { period, page, search } = metricCatalogQuerySchema.parse(input);
+  const where: Prisma.MetricDefinitionWhereInput = {
+    dataSource: { status: "ACTIVE" },
+    ...(search ? { OR: [
+      { name: { contains: search } },
+      { code: { contains: search } },
+      { dataSource: { name: { contains: search } } }
+    ] } : {})
+  };
+  const [total, definitions] = await Promise.all([
+    prisma.metricDefinition.count({ where }),
+    prisma.metricDefinition.findMany({
+      where,
+      include: { dataSource: true },
+      orderBy: [{ dataSource: { name: "asc" } }, { name: "asc" }, { code: "asc" }, { id: "asc" }],
+      skip: (page - 1) * CATALOG_PAGE_SIZE,
+      take: CATALOG_PAGE_SIZE
+    })
+  ]);
+
+  const groups = new Map<string, { source: DefinitionWithSource["dataSource"]; sourceCode: string; codes: Set<string> }>();
+  for (const definition of definitions) {
+    const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
+    if (!mapping.success) continue;
+    const key = JSON.stringify([definition.dataSourceId, mapping.data.sourceCode]);
+    const group = groups.get(key) ?? { source: definition.dataSource, sourceCode: mapping.data.sourceCode, codes: new Set<string>() };
+    group.codes.add(definition.code);
+    groups.set(key, group);
+  }
+
+  const recordsByGroup = new Map<string, Map<string, MetricRecord>>();
+  try {
+    await Promise.all([...groups].map(async ([key, group]) => {
+      const records = await adapterFor(group.source).queryMetrics({ period, sourceCode: group.sourceCode, metricCodes: [...group.codes] });
+      recordsByGroup.set(key, new Map(records.map((record) => [record.metricCode, record])));
+    }));
+  } catch (error) {
+    if (error instanceof MetricServiceError) throw error;
+    throw new MetricServiceError("DATASOURCE_UNAVAILABLE", "指标数据源暂时不可用", 503);
+  }
+
+  return {
+    period, page, pageSize: CATALOG_PAGE_SIZE, total,
+    items: definitions.map((definition) => {
+      const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
+      const key = mapping.success ? JSON.stringify([definition.dataSourceId, mapping.data.sourceCode]) : "";
+      const record = recordsByGroup.get(key)?.get(definition.code);
+      return {
+        definitionId: definition.id,
+        code: definition.code,
+        name: definition.name,
+        dataSource: { id: definition.dataSource.id, name: definition.dataSource.name },
+        writable: definition.writable,
+        metric: record ? publicMetric(record, definition) : null
+      };
+    })
+  };
 }
 
 export async function readMetricSnapshot(definitionId: string, period: string) {

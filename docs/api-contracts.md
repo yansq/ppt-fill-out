@@ -37,7 +37,8 @@ P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接�
 | 更新绑定/草稿 | `PUT /api/fill-instances/{id}/bindings/{placeholderId}` | assignee；可编辑状态 |
 | 提交 | `POST /api/fill-instances/{id}/submit` | assignee；expectedVersion |
 | 退回 | `POST /api/fill-instances/{id}/return` | 任务 Collector |
-| 指标查询 | `GET /api/metrics?period=...` | 有关联任务权限 |
+| 指标查询 | `GET /api/metrics?period=...` | Collector |
+| 指标管理目录 | `GET /api/metrics/catalog?period=YYYY-MM&page=1&search=...` | Collector；服务端分页和搜索 |
 | 指标可用月份 | `GET /api/metrics/periods?year=YYYY`、`GET /api/fill-instances/{id}/metric-periods?year=YYYY` | Collector 或有权实例成员 |
 | 指标修正 | `PUT /api/metrics/{id}` | 可写指标权限；expectedVersion + reason |
 | 保存最终值 | `PUT /api/report-tasks/{id}/final-values/{placeholderId}` | 任务 Collector |
@@ -53,6 +54,8 @@ P4 示例指标库链路已实现：`GET /api/fill-instances/{id}/metrics?period
 指标月份选择：Collector 的 `GET /api/metrics/periods?year=YYYY` 与有权实例成员的 `GET /api/fill-instances/{id}/metric-periods?year=YYYY` 均返回 `{ year, periods: ["YYYY-MM", ...] }`。`periods` 是当前启用数据源中、已配置指标映射所对应的源库月份去重合集；无指标月份在日历中禁用。源库不可用时返回 503，不把未知月份视为可选。创建报告任务的 `reportPeriod` 独立于指标查询，仍允许无指标的月份用于人工填报。
 
 Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{definitionId}`（`{ period, value, expectedVersion, reason }`）和 `GET /api/metrics/{definitionId}/history?period=YYYY-MM`。当前只支持 ADR-0009 的固定测试表映射；源库版本冲突返回 409，外部更新成功但系统镜像失败返回 `SYNC_PENDING`，要求人工对账。
+
+指标管理页使用独立的 `GET /api/metrics/catalog`：`period` 必填，`page` 从 1 开始，`search` 按已配置指标的名称、编码或数据源名称过滤，最多 100 字。每页固定 20 条，返回 `{ period, page, pageSize, total, items }`。`total` 是符合条件的启用数据源指标定义数；每项包含定义摘要和该月份的 `metric`，该月没有值时为 `null`。平台先分页定义，再按数据源分组读取本页源库值，避免一次查询全部指标。原 `GET /api/metrics` 供审核等页面继续使用。
 
 P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`，返回已移除占位符文字的 PNG；模板访问权限与常规预览相同，响应为私有缓存。`POST /api/metrics/{definitionId}/reconcile` 接收 `{ period }`，只允许 Collector；它按源库连续版本历史补齐平台镜像，响应包含 `appliedChanges`，版本缺口返回 `SYNC_HISTORY_GAP`，无新变更时幂等返回 0。
 
