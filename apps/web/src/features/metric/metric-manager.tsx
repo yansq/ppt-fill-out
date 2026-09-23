@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button } from "@report-platform/ui/button";
+import { AvailableMonthPicker } from "./available-month-picker";
 
 type Metric = {
   definitionId: string; code: string; name: string; valueText: string;
@@ -19,6 +20,7 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
   const [period, setPeriod] = useState(initialPeriod);
   const [items, setItems] = useState<Metric[]>([]);
   const [loadedPeriod, setLoadedPeriod] = useState("");
+  const [periodAvailable, setPeriodAvailable] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -44,8 +46,8 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
 
   return <div className="space-y-6">
     <div className="flex flex-wrap items-end gap-3">
-      <label className="grid gap-2 text-sm">指标月份<input className="h-10 rounded-md border bg-background px-3" onChange={(event) => { setPeriod(event.target.value); setLoadedPeriod(""); }} type="month" value={period} /></label>
-      <Button disabled={pending || !period} onClick={load} type="button">{pending ? "加载中…" : "查询指标"}</Button>
+      <AvailableMonthPicker label="指标月份" onAvailabilityChange={setPeriodAvailable} onChange={(next) => { setPeriod(next); setLoadedPeriod(""); }} periodsUrl="/api/metrics/periods" value={period} />
+      <Button disabled={pending || periodAvailable !== true} onClick={load} type="button">{pending ? "加载中…" : "查询指标"}</Button>
       {loadedPeriod === period ? <span className="text-sm">{items.length} 个指标</span> : null}
     </div>
     {message ? <p className="text-sm" role="status">{message}</p> : null}

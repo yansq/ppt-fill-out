@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@report-platform/ui/button";
+import { AvailableMonthPicker } from "../metric/available-month-picker";
 
 import {
   FillPageNavigation,
@@ -111,6 +112,7 @@ export function FillInEditor({
   );
   const [metrics, setMetrics] = useState<MetricOption[]>([]);
   const [loadedPeriod, setLoadedPeriod] = useState("");
+  const [periodAvailable, setPeriodAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
@@ -280,17 +282,9 @@ export function FillInEditor({
           <section className="rounded-xl border bg-card p-5">
             <h2 className="text-lg font-semibold">引用数据库指标</h2>
             <div className="mt-4 flex flex-wrap items-end gap-3">
-              <label className="grid gap-2 text-sm">
-                查看月份
-                <input
-                  className="h-10 rounded-md border bg-background px-3"
-                  onChange={(event) => changeViewPeriod(event.target.value)}
-                  type="month"
-                  value={viewPeriod}
-                />
-              </label>
+              <AvailableMonthPicker label="查看月份" onAvailabilityChange={setPeriodAvailable} onChange={changeViewPeriod} periodsUrl={`/api/fill-instances/${instance.id}/metric-periods`} value={viewPeriod} />
               <Button
-                disabled={busy || !viewPeriod}
+                disabled={busy || periodAvailable !== true}
                 onClick={loadMetrics}
                 type="button"
                 variant="outline"

@@ -118,6 +118,8 @@ STORAGE_ROOT="$PWD/data" mvn -f apps/ppt-service/pom.xml spring-boot:run
 
 默认 Compose 只包含 `report-web` 与 `ppt-service`，不会启动 MySQL。先将 `.env.example` 复制为 `.env` 并替换全部密钥及数据库连接：
 
+如需将本机测试数据和 amd64 镜像带入无公网的内网环境，使用 [内网部署包说明](docs/intranet-deployment.md)。
+
 ```bash
 cp .env.example .env
 docker compose --env-file .env -f docker/docker-compose.yml config

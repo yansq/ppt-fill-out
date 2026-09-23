@@ -7,7 +7,7 @@ import { decryptPassword } from "@/features/data-source/credential";
 import { MetricAdapterError, MySqlMetricDataSource, type MetricRecord } from "@/features/data-source/mysql-adapter";
 import { getFillInstance } from "@/features/report-task/report-task-service";
 
-import { demoQueryConfigSchema, periodSchema, updateMetricSchema } from "./metric-policy";
+import { demoQueryConfigSchema, metricYearSchema, periodSchema, updateMetricSchema } from "./metric-policy";
 import { hasContinuousHistory } from "./metric-sync-policy";
 
 export class MetricServiceError extends Error {
@@ -166,6 +166,43 @@ async function queryAllMetrics(period: string) {
     }
   }
   return result;
+}
+
+async function availablePeriods(year: string) {
+  const definitions = await prisma.metricDefinition.findMany({
+    where: { dataSource: { status: "ACTIVE" } },
+    include: { dataSource: true }
+  });
+  const groups = new Map<string, { source: DefinitionWithSource["dataSource"]; sourceCode: string; codes: Set<string> }>();
+  for (const definition of definitions) {
+    const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
+    if (!mapping.success) continue;
+    const key = `${definition.dataSourceId}:${mapping.data.sourceCode}`;
+    const group = groups.get(key) ?? { source: definition.dataSource, sourceCode: mapping.data.sourceCode, codes: new Set<string>() };
+    group.codes.add(definition.code);
+    groups.set(key, group);
+  }
+  try {
+    const results = await Promise.all([...groups.values()].map((group) => adapterFor(group.source).listAvailablePeriods({
+      year, sourceCode: group.sourceCode, metricCodes: [...group.codes]
+    })));
+    return [...new Set(results.flat())].filter((period) => periodSchema.safeParse(period).success && period.startsWith(`${year}-`)).sort();
+  } catch (error) {
+    if (error instanceof MetricServiceError) throw error;
+    throw new MetricServiceError("DATASOURCE_UNAVAILABLE", "指标数据源暂时不可用", 503);
+  }
+}
+
+export async function availableMetricPeriodsForCollector(yearInput: unknown) {
+  await requireCollector();
+  const year = metricYearSchema.parse(yearInput);
+  return { year, periods: await availablePeriods(year) };
+}
+
+export async function availableMetricPeriodsForInstance(instanceId: string, yearInput: unknown) {
+  await getFillInstance(instanceId);
+  const year = metricYearSchema.parse(yearInput);
+  return { year, periods: await availablePeriods(year) };
 }
 
 export async function queryMetricForInstance(instanceId: string, periodInput: unknown) {

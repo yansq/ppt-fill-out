@@ -82,17 +82,18 @@ describe("metric placement and page switching", () => {
       updatedBy: "admin",
       version: 1
     };
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [metric] }) });
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve({ ok: true, json: async () => url.includes("metric-periods") ? { periods: ["2026-09"] } : { items: [metric] } }));
     vi.stubGlobal("fetch", fetchMock);
     const firstPage = render(<FillInEditor initialInstance={initialInstance} navigation={null} />);
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "加载该月指标" }).hasAttribute("disabled")).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "加载该月指标" }));
     await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
     firstPage.unmount();
 
     render(<FillInEditor initialInstance={{ ...initialInstance, id: "instance-2" }} navigation={null} />);
     await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/metrics?period="))).toHaveLength(1);
   });
 });
 
@@ -100,10 +101,10 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("fill completion prompt", () => {
   it("opens after the filler submits the final assigned page", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve({
       ok: true,
-      json: async () => ({ instance: { ...initialInstance, status: "SUBMITTED", version: 2 }, allAssignedPagesSubmitted: true })
-    });
+      json: async () => url.includes("metric-periods") ? { periods: ["2026-09"] } : { instance: { ...initialInstance, status: "SUBMITTED", version: 2 }, allAssignedPagesSubmitted: true }
+    }));
     vi.stubGlobal("fetch", fetchMock);
     render(<FillInEditor initialInstance={initialInstance} navigation={null} />);
 
@@ -111,7 +112,7 @@ describe("fill completion prompt", () => {
 
     await waitFor(() => expect(screen.getByRole("dialog", { name: "已完成填报" })).toBeTruthy());
     expect(screen.getByRole("link", { name: "返回工作台" }).getAttribute("href")).toBe("/");
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/submit"))).toHaveLength(1);
   });
 
   it("does not show completion while another assigned page remains", async () => {

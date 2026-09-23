@@ -47,6 +47,7 @@ describe("review page layout", () => {
     const savedManual = { ...filling, task: { ...filling.task, version: 4 }, slides: filling.slides.map((slide, index) => index === 0 ? { ...slide, placeholders: slide.placeholders.map((placeholder) => ({ ...placeholder, finalValue: { valueText: "收集人填写", resolutionType: "MANUAL" } })) } : slide) };
     const savedMetric = { ...savedManual, task: { ...savedManual.task, version: 5 }, slides: savedManual.slides.map((slide, index) => index === 0 ? { ...slide, placeholders: slide.placeholders.map((placeholder) => ({ ...placeholder, finalValue: { valueText: "42", resolutionType: "DATABASE_METRIC", sourceSnapshotJson: { metricName: "收入", period: "2026-09" } } })) } : slide) };
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ periods: ["2026-09"] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => savedManual })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [{ definitionId: "metric-1", code: "M1", name: "收入", valueText: "42", unit: "元", dataSource: { name: "示例库" } }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => savedMetric });
@@ -56,15 +57,16 @@ describe("review page layout", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "手工最终值 first" }), { target: { value: "收集人填写" } });
     fireEvent.click(screen.getByRole("button", { name: "保存人工值" }));
     await waitFor(() => expect(screen.getByText(/最终值：收集人填写/)).toBeTruthy());
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ resolutionType: "MANUAL", valueText: "收集人填写", expectedVersion: 3 });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ resolutionType: "MANUAL", valueText: "收集人填写", expectedVersion: 3 });
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "查询指标" }).hasAttribute("disabled")).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "查询指标" }));
     await waitFor(() => expect(screen.getByRole("combobox", { name: "选择指标 first" })).toBeTruthy());
     fireEvent.change(screen.getByRole("combobox", { name: "选择指标 first" }), { target: { value: "metric-1" } });
     fireEvent.click(screen.getByRole("button", { name: "保存指标值" }));
     await waitFor(() => expect(screen.getByText(/最终值：42/)).toBeTruthy());
     expect(screen.getByText(/收入 · 2026-09/)).toBeTruthy();
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({ resolutionType: "DATABASE_METRIC", metricDefinitionId: "metric-1", metricPeriod: "2026-09", expectedVersion: 4 });
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toMatchObject({ resolutionType: "DATABASE_METRIC", metricDefinitionId: "metric-1", metricPeriod: "2026-09", expectedVersion: 4 });
   });
 
   it("keeps the same three-column workspace while the task is filling", () => {

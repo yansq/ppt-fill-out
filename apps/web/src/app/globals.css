@@ -79,6 +79,15 @@ a, button, input, select, textarea { transition: border-color .15s, background-c
 .fill-page-container { max-width: 1600px; }
 .fill-page-grid { display: grid; align-items: start; gap: 20px; }
 .ppt-preview-image { aspect-ratio: var(--preview-aspect-ratio, 16 / 9); }
+.ppt-preview-loading { background: linear-gradient(145deg, #123e39, #10282c); color: #fff; }
+.ppt-preview-loading-slide { background: linear-gradient(145deg, #3a8276, #235c59); border-color: rgb(255 255 255 / 32%); animation: ppt-preview-float 2.4s ease-in-out infinite; }
+.ppt-preview-loading-slide::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 25%, rgb(255 255 255 / 16%) 50%, transparent 75%); transform: translateX(-130%); animation: ppt-preview-sweep 2.4s ease-in-out infinite; }
+.ppt-preview-loading-track { background: rgb(255 255 255 / 22%); }
+.ppt-preview-loading-progress { background: #b8ead6; animation: ppt-preview-progress 1.6s ease-in-out infinite; }
+@keyframes ppt-preview-float { 50% { transform: translateY(-6px); } }
+@keyframes ppt-preview-sweep { 55%, 100% { transform: translateX(130%); } }
+@keyframes ppt-preview-progress { from { transform: translateX(-110%); } to { transform: translateX(310%); } }
+@media (prefers-reduced-motion: reduce) { .ppt-preview-loading-slide, .ppt-preview-loading-slide::after, .ppt-preview-loading-progress { animation: none; }.ppt-preview-loading-progress { transform: translateX(100%); } }
 @media (min-width: 1280px) { .fill-page-grid { grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); }.fill-page-grid.has-page-nav { grid-template-columns: 160px minmax(0, 2fr) minmax(320px, 1fr); }.fill-page-nav { position: sticky; top: 96px; max-height: calc(100vh - 112px); overflow-y: auto; } }
 .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 28px; }
 .page-heading h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.2; font-weight: 750; letter-spacing: -.035em; }

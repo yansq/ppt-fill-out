@@ -1,0 +1,51 @@
+name: report-platform
+
+services:
+  ppt-service:
+    image: report-platform/ppt-service:2026-09-23
+    environment:
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+      LIBREOFFICE_EXECUTABLE: soffice
+      PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY:?set PPT_SERVICE_API_KEY}
+      STORAGE_ROOT: /data
+    volumes:
+      - report-data:/data
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  report-web:
+    image: report-platform/report-web:2026-09-23
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL:?set AUTH_URL}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      ENCRYPTION_KEY_VERSION: v1
+      PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY:?set PPT_SERVICE_API_KEY}
+      PPT_SERVICE_URL: http://ppt-service:8080
+      STORAGE_ROOT: /data
+    volumes:
+      - report-data:/data
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:3000"
+    depends_on:
+      ppt-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  report-data:
+    name: report-data

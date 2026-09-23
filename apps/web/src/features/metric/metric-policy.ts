@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const periodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "年月必须为 YYYY-MM");
+export const metricYearSchema = z.string().regex(/^\d{4}$/, "年份必须为 YYYY");
 
 export const updateMetricSchema = z.object({
   period: periodSchema,

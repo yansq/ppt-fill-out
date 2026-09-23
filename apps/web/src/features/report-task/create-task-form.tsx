@@ -60,7 +60,7 @@ export function CreateTaskForm({ templates }: { templates: TemplateOption[] }) {
       </label>
       <label className="grid gap-2 text-sm font-medium">
         报告周期
-        <input className="h-10 rounded-md border bg-background px-3" name="reportPeriod" pattern="[0-9]{4}-(0[1-9]|1[0-2])" placeholder="YYYY-MM" required />
+        <input className="h-10 rounded-md border bg-background px-3" name="reportPeriod" required type="month" />
       </label>
       <Button disabled={pending || templates.length === 0} type="submit">{pending ? "创建中…" : "创建任务"}</Button>
       {error ? <p className="text-sm text-primary md:col-span-4" role="alert">{error}</p> : null}

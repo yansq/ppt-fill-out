@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@report-platform/ui/button";
 import { instanceStatusText, taskStatusText } from "../../components/status";
 import { PptPreviewImage } from "../fill-in/ppt-preview-image";
+import { AvailableMonthPicker } from "../metric/available-month-picker";
 
 import type { getReview } from "./review-service";
 
@@ -42,6 +43,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
   const [metricPeriod, setMetricPeriod] = useState(initial.task.reportPeriod);
   const [metrics, setMetrics] = useState<MetricOption[]>([]);
   const [loadedPeriod, setLoadedPeriod] = useState("");
+  const [metricPeriodAvailable, setMetricPeriodAvailable] = useState<boolean | null>(null);
   const [metricChoices, setMetricChoices] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -144,6 +146,10 @@ export function ReviewPanel({ initial }: { initial: Review }) {
         <p className="mt-1 text-sm muted">{slideStatus(selectedSlide, isFilling)} · {isFilling ? `已提交 ${selectedSlide.instances.filter((instance) => instance.status === "SUBMITTED" || instance.status === "REVIEWED").length}/${selectedSlide.instances.length} 人` : `已确认 ${selectedSlide.placeholders.filter((placeholder) => placeholder.finalValue).length}/${selectedSlide.placeholders.length} 项`}</p>
         {selectedSlide.placeholders.length === 0 ? <p className="mt-4 rounded-md bg-accent p-3 text-sm">本页没有占位符，无需填报或审核。</p> : null}
         {selectedSlide.placeholders.length > 0 && selectedSlide.instances.length === 0 ? <p className="mt-4 rounded-md bg-accent p-3 text-sm">本页尚未分配填报人。</p> : null}
+        {canSetValue && selectedSlide.placeholders.length > 0 ? <div className="mt-4 flex flex-wrap items-end gap-2 rounded-md border bg-background p-3">
+          <AvailableMonthPicker label="指标月份" onAvailabilityChange={setMetricPeriodAvailable} onChange={(period) => { setMetricPeriod(period); setLoadedPeriod(""); setMetrics([]); setMetricChoices({}); }} periodsUrl="/api/metrics/periods" value={metricPeriod} />
+          <Button disabled={busy || metricPeriodAvailable !== true} onClick={loadMetrics} size="sm" type="button" variant="outline">查询指标</Button>
+        </div> : null}
         <div className="mt-4 space-y-2">{selectedSlide.instances.map((instance) => <div className="rounded-md border p-3 text-sm" key={instance.id}>
           <p>{instance.assignee.name || instance.assignee.username}（{instance.assignee.employeeNumber}） · {instanceStatusText[instance.status]}</p>
           {instance.status === "SUBMITTED" && canReview ? <div className="mt-2 flex flex-wrap gap-2">
@@ -160,8 +166,8 @@ export function ReviewPanel({ initial }: { initial: Review }) {
           {canSetValue ? <div className="mt-3 space-y-3 rounded-md border bg-background p-3">
             <p className="font-medium">收集人填写最终值</p>
             <div className="grid gap-2"><input aria-label={`手工最终值 ${placeholder.key}`} className="h-9 min-w-0 rounded-md border bg-background px-2" onChange={(event) => setManual({ ...manual, [placeholder.id]: event.target.value })} placeholder="人工输入值" value={manual[placeholder.id] ?? ""} /><Button disabled={busy || !manual[placeholder.id]?.trim()} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "MANUAL", valueText: manual[placeholder.id] })} size="sm" type="button">保存人工值</Button></div>
-            <div className="grid gap-2 border-t pt-3"><div className="flex flex-wrap gap-2"><input aria-label="指标月份" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2" onChange={(event) => { setMetricPeriod(event.target.value); setLoadedPeriod(""); setMetrics([]); }} type="month" value={metricPeriod} /><Button disabled={busy || !/^\d{4}-(0[1-9]|1[0-2])$/.test(metricPeriod)} onClick={loadMetrics} size="sm" type="button" variant="outline">查询指标</Button></div>
-              {loadedPeriod === metricPeriod ? <><select aria-label={`选择指标 ${placeholder.key}`} className="h-9 min-w-0 rounded-md border bg-background px-2" onChange={(event) => setMetricChoices({ ...metricChoices, [placeholder.id]: event.target.value })} value={metricChoices[placeholder.id] ?? ""}><option value="">请选择指标</option>{metrics.map((metric) => <option key={metric.definitionId} value={metric.definitionId}>{metric.name}（{metric.code}）· {metric.valueText}{metric.unit ?? ""} · {metric.dataSource.name}</option>)}</select><Button disabled={busy || !metricChoices[placeholder.id]} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "DATABASE_METRIC", metricDefinitionId: metricChoices[placeholder.id], metricPeriod })} size="sm" type="button" variant="outline">保存指标值</Button></> : null}
+            <div className="grid gap-2 border-t pt-3">
+              {loadedPeriod === metricPeriod ? <><select aria-label={`选择指标 ${placeholder.key}`} className="h-9 min-w-0 rounded-md border bg-background px-2" onChange={(event) => setMetricChoices({ ...metricChoices, [placeholder.id]: event.target.value })} value={metricChoices[placeholder.id] ?? ""}><option value="">请选择指标</option>{metrics.map((metric) => <option key={metric.definitionId} value={metric.definitionId}>{metric.name}（{metric.code}）· {metric.valueText}{metric.unit ?? ""} · {metric.dataSource.name}</option>)}</select><Button disabled={busy || !metricChoices[placeholder.id]} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "DATABASE_METRIC", metricDefinitionId: metricChoices[placeholder.id], metricPeriod })} size="sm" type="button" variant="outline">保存指标值</Button></> : <p className="text-xs muted">请先在上方选择有指标的月份并查询。</p>}
             </div>
           </div> : null}
           {placeholder.finalValue ? <p className="mt-3 rounded-md bg-accent p-2">最终值：{placeholder.finalValue.valueText} · {placeholder.finalValue.resolutionType === "MANUAL" ? "人工输入" : placeholder.finalValue.resolutionType === "DATABASE_METRIC" ? metricSourceLabel(placeholder.finalValue) : "采用提交值"}</p> : null}

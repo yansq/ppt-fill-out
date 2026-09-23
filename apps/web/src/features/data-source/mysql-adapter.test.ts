@@ -56,6 +56,18 @@ describe("MySQL metric adapter", () => {
     expect(end).toHaveBeenCalledOnce();
   });
 
+  it("lists only months with records for configured metrics", async () => {
+    execute.mockResolvedValueOnce([[{ period: "2026-03" }, { period: "2026-09" }]]);
+    const adapter = new MySqlMetricDataSource({
+      host: "metrics.internal", port: 3306, databaseName: "metrics", username: "reader", password: "secret"
+    });
+    const periods = await adapter.listAvailablePeriods({ year: "2026", sourceCode: "demo", metricCodes: ["revenue", "profit"] });
+
+    expect(periods).toEqual(["2026-03", "2026-09"]);
+    expect(execute).toHaveBeenCalledWith(expect.stringContaining("SELECT DISTINCT period FROM metric_record"), ["demo", "2026-%", "revenue", "profit"]);
+    expect(end).toHaveBeenCalledOnce();
+  });
+
   it("rolls back and rejects an outdated source version", async () => {
     execute.mockResolvedValueOnce([[{ id: 1, version: 2 }]]);
     const adapter = new MySqlMetricDataSource({

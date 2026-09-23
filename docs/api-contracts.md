@@ -38,6 +38,7 @@ P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接�
 | 提交 | `POST /api/fill-instances/{id}/submit` | assignee；expectedVersion |
 | 退回 | `POST /api/fill-instances/{id}/return` | 任务 Collector |
 | 指标查询 | `GET /api/metrics?period=...` | 有关联任务权限 |
+| 指标可用月份 | `GET /api/metrics/periods?year=YYYY`、`GET /api/fill-instances/{id}/metric-periods?year=YYYY` | Collector 或有权实例成员 |
 | 指标修正 | `PUT /api/metrics/{id}` | 可写指标权限；expectedVersion + reason |
 | 保存最终值 | `PUT /api/report-tasks/{id}/final-values/{placeholderId}` | 任务 Collector |
 | AI 候选 | `POST /api/report-tasks/{id}/ai-generations` | 任务 Collector |
@@ -48,6 +49,8 @@ P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接�
 P4 第一切片新增 `GET/POST /api/data-sources` 和 `POST /api/data-sources/{id}/test`，均仅允许 Collector。创建请求为 `{ name, host, port?, databaseName, username, password }`，目前只创建 `MYSQL` 类型。列表及创建响应不包含密码或密文；连接测试成功返回 `{ ok: true, latencyMs }`，失败统一返回 `DATASOURCE_UNAVAILABLE`，不暴露驱动错误。配置启用状态与连接健康不是同一字段，详见 ADR-0008。
 
 P4 示例指标库链路已实现：`GET /api/fill-instances/{id}/metrics?period=YYYY-MM` 只向有权实例成员返回该月指标、任务 `reportPeriod` 和独立 `viewPeriod`；`PUT /api/fill-instances/{id}/bindings/{placeholderId}` 支持 `{ expectedVersion, sourceType: "MANUAL_TEXT", manualValue }` 或 `{ expectedVersion, sourceType: "DATABASE_METRIC", metricDefinitionId, metricPeriod }`。后者保存实际指标月份及来源快照，不改变任务月份。`POST /api/fill-instances/{id}/submit` 以 `{ expectedVersion }` 事务化冻结全部占位符的 SubmittedValue，缺失绑定返回 400，过期版本返回 409。
+
+指标月份选择：Collector 的 `GET /api/metrics/periods?year=YYYY` 与有权实例成员的 `GET /api/fill-instances/{id}/metric-periods?year=YYYY` 均返回 `{ year, periods: ["YYYY-MM", ...] }`。`periods` 是当前启用数据源中、已配置指标映射所对应的源库月份去重合集；无指标月份在日历中禁用。源库不可用时返回 503，不把未知月份视为可选。创建报告任务的 `reportPeriod` 独立于指标查询，仍允许无指标的月份用于人工填报。
 
 Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{definitionId}`（`{ period, value, expectedVersion, reason }`）和 `GET /api/metrics/{definitionId}/history?period=YYYY-MM`。当前只支持 ADR-0009 的固定测试表映射；源库版本冲突返回 409，外部更新成功但系统镜像失败返回 `SYNC_PENDING`，要求人工对账。
 

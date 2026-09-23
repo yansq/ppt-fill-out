@@ -10,6 +10,7 @@ export interface MySqlConnectionConfig {
 
 export interface MetricDataSource {
   testConnection(): Promise<{ ok: boolean; latencyMs: number }>;
+  listAvailablePeriods(params: { year: string; sourceCode: string; metricCodes: string[] }): Promise<string[]>;
   queryMetrics(params: { period: string; sourceCode: string; metricCodes?: string[]; search?: string }): Promise<MetricRecord[]>;
   updateMetric(params: { period: string; sourceCode: string; metricCode: string; value: string; expectedVersion: number; reason: string; actor: string }): Promise<MetricRecord & { previousValueText: string }>;
   getMetricHistory(params: { period: string; sourceCode: string; metricCode: string }): Promise<MetricChange[]>;
@@ -107,6 +108,20 @@ export class MySqlMetricDataSource implements MetricDataSource {
     try {
       await connection.query("SELECT 1");
       return { ok: true, latencyMs: Math.round(performance.now() - started) };
+    } finally {
+      await connection.end();
+    }
+  }
+
+  async listAvailablePeriods({ year, sourceCode, metricCodes }: Parameters<MetricDataSource["listAvailablePeriods"]>[0]) {
+    if (metricCodes.length === 0) return [];
+    const connection = await this.connect();
+    try {
+      const [rows] = await connection.execute<(RowDataPacket & { period: string })[]>(
+        `SELECT DISTINCT period FROM metric_record WHERE data_source_code = ? AND period LIKE ? AND metric_code IN (${metricCodes.map(() => "?").join(",")}) ORDER BY period`,
+        [sourceCode, `${year}-%`, ...metricCodes]
+      );
+      return rows.map((row) => row.period);
     } finally {
       await connection.end();
     }

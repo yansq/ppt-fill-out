@@ -19,7 +19,11 @@ describe("PPT preview loading", () => {
   it("shows a rendering indicator until the preview image is loaded", () => {
     render(<PptPreviewImage alt="当前页预览" fallbackSrc="/template.png" src="/draft.png" />);
 
-    expect(screen.getByRole("status").textContent).toContain("正在渲染页面预览");
+    const loading = screen.getByRole("status");
+    expect(loading.textContent).toContain("正在渲染页面预览");
+    expect(loading.className).toContain("ppt-preview-loading");
+    expect(loading.querySelector(".ppt-preview-loading-slide")).toBeTruthy();
+    expect(loading.querySelector(".ppt-preview-loading-progress")).toBeTruthy();
     fireEvent.load(screen.getByRole("img", { name: "当前页预览", hidden: true }));
     expect(screen.queryByRole("status")).toBeNull();
   });

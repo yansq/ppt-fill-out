@@ -73,6 +73,7 @@ docs/
 
 1. Web 服务端确认当前用户拥有 FillInstance。
 2. 指标查询使用 `viewPeriod`；绑定保存 metricDefinitionId、实际 period 和 SourceValue 快照。
+   指标月份日历通过授权 API 按年读取启用数据源内已配置指标的可用月份；源库 Adapter 只执行参数化的月份去重查询。报告任务创建月份仍独立于指标有无。
 3. 草稿可更新绑定与人工值；提交事务冻结 SubmittedValue，并使用 `version` 做乐观锁。
 4. 后续指标变化不反向修改已提交快照。
 
