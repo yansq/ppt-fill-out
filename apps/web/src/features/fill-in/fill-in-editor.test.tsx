@@ -82,18 +82,38 @@ describe("metric placement and page switching", () => {
       updatedBy: "admin",
       version: 1
     };
-    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve({ ok: true, json: async () => url.includes("metric-periods") ? { periods: ["2026-09"] } : { items: [metric] } }));
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve({ ok: true, json: async () => url.includes("metric-periods") ? { periods: ["2026-08", "2026-09"] } : { items: [metric] } }));
     vi.stubGlobal("fetch", fetchMock);
     const firstPage = render(<FillInEditor initialInstance={initialInstance} navigation={null} />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "加载该月指标" }).hasAttribute("disabled")).toBe(false));
-    fireEvent.click(screen.getByRole("button", { name: "加载该月指标" }));
     await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "加载该月指标" })).toBeNull();
     firstPage.unmount();
 
     render(<FillInEditor initialInstance={{ ...initialInstance, id: "instance-2" }} navigation={null} />);
     await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/metrics?period="))).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "查看月份" }));
+    fireEvent.click(screen.getByRole("button", { name: "2026年8月" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/metrics?period=2026-08"))).toBe(true));
+    await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
+  });
+
+  it("offers retry when automatic metric loading fails", async () => {
+    let attempts = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(url.includes("metric-periods")
+      ? { ok: true, json: async () => ({ periods: ["2026-09"] }) }
+      : ++attempts === 1
+        ? { ok: false, json: async () => ({ error: { message: "指标服务暂时不可用" } }) }
+        : { ok: true, json: async () => ({ items: [] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<FillInEditor initialInstance={initialInstance} navigation={null} />);
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("指标服务暂时不可用"));
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(screen.getByText("0 个可用指标")).toBeTruthy());
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/metrics?period="))).toHaveLength(2);
   });
 });
 

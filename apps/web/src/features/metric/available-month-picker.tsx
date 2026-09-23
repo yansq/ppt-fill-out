@@ -49,7 +49,7 @@ export function AvailableMonthPicker({ label, value, onChange, onAvailabilityCha
   const selectedYear = yearOf(value);
   const selectedPeriods = periodsByYear[selectedYear];
   const available = value && selectedPeriods ? selectedPeriods.includes(value) : value ? null : false;
-  useEffect(() => { onAvailabilityChange?.(available); }, [available, onAvailabilityChange]);
+  useEffect(() => { onAvailabilityChange?.(available); }, [available, onAvailabilityChange, value]);
 
   useEffect(() => {
     if (!open) return;

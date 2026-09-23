@@ -408,6 +408,14 @@
 
 验证：`pnpm lint`、`pnpm typecheck`、Web 26 文件/78 项测试、Next.js build、Java `clean package`/tests、Prisma validate、Compose config 均通过；Web amd64 容器 `/api/health/live` 与连接真实本机 MySQL 的 `/api/health/ready` 均为 200，PPT amd64 容器 readiness 为 200。Compose `up -d --no-build --pull never` 后两服务均 healthy、Web readiness 为 200。SQL 在临时空 MySQL 8.0.27 中导入成功，27 张表与本机逐表行数一致，含 6 条迁移、12 条指标；重复导入被拒绝。重新加密脚本更新 1 个指标源，并用更新后凭据查询到 12 条指标。共享文件归档在临时 Docker 卷解包成功。镜像归档经 `docker load` 复验三张镜像标签。目标内网服务器、真实连接参数和断公网演练尚未验证。
 
+### 2026-09-23 — 填报页月份切换自动加载指标
+
+- [x] “引用数据库指标”在当前月份可用时自动加载指标；切换月份直接更新指标列表，移除“加载该月指标”按钮。
+- [x] 跨页沿用已缓存的同任务月份指标；异步请求在切换月份或页面时取消，失败时显示原因并提供重试。
+- [x] 月份控件在两个有数据月份之间切换时重新通知可用状态，确保触发自动加载。
+
+验证：`pnpm lint`、`pnpm typecheck`、Web 26 文件/79 项测试及 Next.js build 通过；交互测试覆盖初次自动加载、跨页缓存、切换月份自动查询和失败重试。
+
 ## 进行中
 
 - P6 收尾：浏览器审核和生成面板的实际交互、权限、异常状态与全页视觉回归；P4 企业库 Adapter 待拿到真实表结构后实现。

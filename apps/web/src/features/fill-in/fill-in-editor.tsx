@@ -113,6 +113,8 @@ export function FillInEditor({
   const [metrics, setMetrics] = useState<MetricOption[]>([]);
   const [loadedPeriod, setLoadedPeriod] = useState("");
   const [periodAvailable, setPeriodAvailable] = useState<boolean | null>(null);
+  const [metricError, setMetricError] = useState("");
+  const [metricRetry, setMetricRetry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
@@ -133,6 +135,34 @@ export function FillInEditor({
     return () => window.clearTimeout(timer);
   }, [initialInstance.task.id, initialInstance.task.reportPeriod]);
 
+  useEffect(() => {
+    if (periodAvailable !== true || loadedPeriod === viewPeriod) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/fill-instances/${instance.id}/metrics?period=${encodeURIComponent(viewPeriod)}`,
+          { signal: controller.signal },
+        );
+        const payload = (await response.json()) as {
+          items?: MetricOption[];
+          error?: { message: string };
+        };
+        if (!response.ok)
+          throw new Error(payload.error?.message ?? "指标加载失败");
+        if (controller.signal.aborted) return;
+        const items = payload.items ?? [];
+        setMetrics(items);
+        setLoadedPeriod(viewPeriod);
+        saveMetricSession(instance.task.id, viewPeriod, items);
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setMetricError(error instanceof Error ? error.message : "指标服务暂时不可用");
+      }
+    })();
+    return () => controller.abort();
+  }, [instance.id, instance.task.id, loadedPeriod, metricRetry, periodAvailable, viewPeriod]);
+
   function locatePlaceholder(placeholderId: string) {
     if (highlightedId === placeholderId) {
       setHighlightedId(null);
@@ -152,32 +182,10 @@ export function FillInEditor({
     setDirtyIds((previous) => new Set(previous).add(placeholderId));
   }
 
-  async function loadMetrics() {
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch(
-        `/api/fill-instances/${instance.id}/metrics?period=${encodeURIComponent(viewPeriod)}`,
-      );
-      const payload = (await response.json()) as {
-        items?: MetricOption[];
-        error?: { message: string };
-      };
-      if (!response.ok)
-        throw new Error(payload.error?.message ?? "指标加载失败");
-      const items = payload.items ?? [];
-      setMetrics(items);
-      setLoadedPeriod(viewPeriod);
-      saveMetricSession(instance.task.id, viewPeriod, items);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "指标服务暂时不可用");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function changeViewPeriod(period: string) {
     const cached = readMetricCache(instance.task.id, period);
+    setPeriodAvailable(null);
+    setMetricError("");
     setViewPeriod(period);
     setMetrics(cached ?? []);
     setLoadedPeriod(cached ? period : "");
@@ -283,20 +291,14 @@ export function FillInEditor({
             <h2 className="text-lg font-semibold">引用数据库指标</h2>
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <AvailableMonthPicker label="查看月份" onAvailabilityChange={setPeriodAvailable} onChange={changeViewPeriod} periodsUrl={`/api/fill-instances/${instance.id}/metric-periods`} value={viewPeriod} />
-              <Button
-                disabled={busy || periodAvailable !== true}
-                onClick={loadMetrics}
-                type="button"
-                variant="outline"
-              >
-                加载该月指标
-              </Button>
               <span className="text-sm">
                 {loadedPeriod === viewPeriod
                   ? `${metrics.length} 个可用指标`
-                  : "尚未加载"}
+                  : periodAvailable === false ? "该月份暂无可用指标" : metricError ? "指标加载失败" : "正在加载该月指标…"}
               </span>
+              {metricError ? <Button onClick={() => { setMetricError(""); setMetricRetry((previous) => previous + 1); }} type="button" variant="outline">重试</Button> : null}
             </div>
+            {metricError ? <p className="mt-2 text-sm" role="alert">{metricError}</p> : null}
             {viewPeriod !== instance.task.reportPeriod ? (
               <p
                 className="mt-3 rounded-md border border-primary bg-accent p-3 text-sm text-accent-foreground"
