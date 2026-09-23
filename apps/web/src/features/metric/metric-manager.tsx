@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@report-platform/ui/button";
 import { AvailableMonthPicker } from "./available-month-picker";
@@ -21,24 +21,26 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
   const [items, setItems] = useState<Metric[]>([]);
   const [loadedPeriod, setLoadedPeriod] = useState("");
   const [periodAvailable, setPeriodAvailable] = useState<boolean | null>(null);
-  const [pending, setPending] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [message, setMessage] = useState("");
 
-  async function load() {
-    setPending(true);
-    setMessage("");
-    try {
-      const response = await fetch(`/api/metrics?period=${encodeURIComponent(period)}`);
-      const payload = await response.json() as { items?: Metric[]; error?: { message: string } };
-      if (!response.ok) throw new Error(payload.error?.message ?? "加载指标失败");
-      setItems(payload.items ?? []);
-      setLoadedPeriod(period);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "指标服务暂时不可用");
-    } finally {
-      setPending(false);
-    }
-  }
+  useEffect(() => {
+    if (periodAvailable !== true || loadedPeriod === period) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/metrics?period=${encodeURIComponent(period)}`, { signal: controller.signal });
+        const payload = await response.json() as { items?: Metric[]; error?: { message: string } };
+        if (!response.ok) throw new Error(payload.error?.message ?? "加载指标失败");
+        if (controller.signal.aborted) return;
+        setItems(payload.items ?? []);
+        setLoadedPeriod(period);
+      } catch (error) {
+        if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "指标服务暂时不可用");
+      }
+    })();
+    return () => controller.abort();
+  }, [period, periodAvailable, loadedPeriod, retry]);
 
   function replace(updated: Metric) {
     setItems((previous) => previous.map((item) => item.definitionId === updated.definitionId ? updated : item));
@@ -46,9 +48,9 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
 
   return <div className="space-y-6">
     <div className="flex flex-wrap items-end gap-3">
-      <AvailableMonthPicker label="指标月份" onAvailabilityChange={setPeriodAvailable} onChange={(next) => { setPeriod(next); setLoadedPeriod(""); }} periodsUrl="/api/metrics/periods" value={period} />
-      <Button disabled={pending || periodAvailable !== true} onClick={load} type="button">{pending ? "加载中…" : "查询指标"}</Button>
-      {loadedPeriod === period ? <span className="text-sm">{items.length} 个指标</span> : null}
+      <AvailableMonthPicker label="指标月份" onAvailabilityChange={setPeriodAvailable} onChange={(next) => { setPeriodAvailable(null); setMessage(""); setPeriod(next); setLoadedPeriod(""); setItems([]); }} periodsUrl="/api/metrics/periods" value={period} />
+      <span className="text-sm">{loadedPeriod === period ? `${items.length} 个指标` : periodAvailable === null ? "正在确认可用月份…" : periodAvailable === false ? "该月份暂无可用指标" : message ? "指标加载失败" : "正在加载指标…"}</span>
+      {message ? <Button onClick={() => { setMessage(""); setRetry((previous) => previous + 1); }} type="button" variant="outline">重试</Button> : null}
     </div>
     {message ? <p className="text-sm" role="status">{message}</p> : null}
     {loadedPeriod === period ? <div className="space-y-4">{items.map((item) => <MetricRow item={item} key={`${period}:${item.definitionId}`} onUpdated={replace} />)}</div> : null}

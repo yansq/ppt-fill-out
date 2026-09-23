@@ -21,7 +21,7 @@ export default async function MetricsPage() {
       <div>
         <p className="eyebrow">收集人 · 指标管理</p>
         <h1 className="text-3xl font-semibold">指标管理</h1>
-        <p className="mt-2 text-sm">按月份查询指标，核对当前值并查看修改记录。</p>
+        <p className="mt-2 text-sm">选择月份后自动加载指标，核对当前值并查看修改记录。</p>
       </div>
     </header>
     <MetricManager initialPeriod={new Date().toISOString().slice(0, 7)} />
