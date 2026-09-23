@@ -35,10 +35,10 @@ describe("server-side actor authorization", () => {
     await expect(requireCollector()).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 
-  it("requires the current database role for Filler actions", async () => {
+  it("grants Filler actions to an active Collector without a separate Filler role", async () => {
     authMock.mockResolvedValue({ user: { id: "user-1" } });
     findUniqueMock.mockResolvedValue({ id: "user-1", employeeNumber: "123456", username: "alice", status: "ACTIVE", roles: [{ role: { code: "COLLECTOR" } }] });
-    await expect(requireFiller()).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+    await expect(requireFiller()).resolves.toMatchObject({ id: "user-1", roles: new Set(["COLLECTOR", "FILLER"]) });
   });
 
   it("returns the employee number used by the workspace account label", async () => {

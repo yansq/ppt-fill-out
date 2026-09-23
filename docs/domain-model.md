@@ -26,7 +26,7 @@ User --< OperationLog
 
 - `User(id, employeeNumber, username, email?, name, status, createdAt, updatedAt)`；employeeNumber 为唯一的 6 位数字工号并用于登录，username 保留为唯一的人员名称，email 可选、填写时唯一。既有用户迁移时按创建顺序回填唯一工号。
 - `Role(id, code, name)`；code 唯一，首版为 `COLLECTOR`、`FILLER`。
-- `UserRole(userId, roleId)`；复合唯一键。
+- `UserRole(userId, roleId)`；复合唯一键。有效权限中 `COLLECTOR` 继承 `FILLER`，无需为收集人额外写入角色关系；填报实例仍按 assigneeId 授权，详见 ADR-0018。
 - P3 Credentials 身份源使用 `UserCredential(userId, passwordHash, failedAttempts, lockedUntil, updatedAt)`；密码与业务 User 分表。Auth.js 当前使用 JWT 会话，Account/Session/VerificationToken 为未来 OAuth/数据库会话保留。
 
 ### 模板

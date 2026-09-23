@@ -29,6 +29,8 @@ function assignmentKey(slideId: string, assigneeId: string) {
   return `${slideId}:${assigneeId}`;
 }
 
+const assignableRoleCodes = ["FILLER", "COLLECTOR"] as const;
+
 function findCollectorTask(taskId: string, collectorId: string) {
   return prisma.reportTask.findFirst({
     where: { id: taskId, collectorId },
@@ -163,7 +165,7 @@ export async function listAssignableFillers(existingAssigneeIds: string[] = []) 
   await requireCollector();
   return prisma.user.findMany({
     where: { OR: [
-      { status: "ACTIVE", roles: { some: { role: { code: "FILLER" } } } },
+      { status: "ACTIVE", roles: { some: { role: { code: { in: [...assignableRoleCodes] } } } } },
       { id: { in: existingAssigneeIds } }
     ] },
     orderBy: [{ name: "asc" }, { username: "asc" }],
@@ -231,12 +233,12 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
         where: {
           id: { in: assigneeIds },
           status: "ACTIVE",
-          roles: { some: { role: { code: "FILLER" } } }
+          roles: { some: { role: { code: { in: [...assignableRoleCodes] } } } }
         },
         select: { id: true }
       });
       if (activeFillers.length !== assigneeIds.length) {
-        throw new ReportTaskError("VALIDATION_ERROR", "填报人不存在、被停用或缺少 Filler 角色", 400);
+        throw new ReportTaskError("VALIDATION_ERROR", "填报人不存在、被停用或没有填报权限", 400);
       }
 
       if (removals.length === 0 && additions.length === 0) return;

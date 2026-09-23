@@ -33,7 +33,7 @@ P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接�
 | 分配页面 | `PUT /api/report-tasks/{id}/assignments` | 任务 Collector |
 | 我的填报实例 | `GET /api/fill-instances/mine` | 当前用户 |
 | 填报详情 | `GET /api/fill-instances/{id}` | assignee 或任务 Collector |
-| 开始填报 | `POST /api/fill-instances/{id}/start` | 实例 assignee 且持有 Filler 角色 |
+| 开始填报 | `POST /api/fill-instances/{id}/start` | 实例 assignee 且具备填报权限（Filler 或 Collector） |
 | 更新绑定/草稿 | `PUT /api/fill-instances/{id}/bindings/{placeholderId}` | assignee；可编辑状态 |
 | 提交 | `POST /api/fill-instances/{id}/submit` | assignee；expectedVersion |
 | 退回 | `POST /api/fill-instances/{id}/return` | 任务 Collector |
@@ -63,9 +63,9 @@ P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`�
 
 草稿预览改为 `GET /api/fill-instances/{id}/draft-preview?version={fillInstanceVersion}`，按实例权限读取已保存绑定值；版本不一致返回 409，他人实例返回 404。响应为 `image/png` 和 `private, no-store`，保存绑定后前端用新版本 URL 重新请求。
 
-P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名 Filler 分别对应独立 FillInstance；无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
+P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名具备填报权限的用户分别对应独立 FillInstance；活跃 Collector 也可被分配，详见 ADR-0018。无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
 
-`POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前 Filler 的实例；他人的实例 ID 返回 404。
+`POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前具备填报权限用户被分配的实例；他人的实例 ID 返回 404。
 
 `POST /api/fill-instances/{id}/submit` 成功返回 `{ instance, allAssignedPagesSubmitted }`；布尔值只统计当前填报人在同一任务中负责的页面，`SUBMITTED` 与 `REVIEWED` 视为已完成。
 

@@ -26,7 +26,9 @@ export async function currentActor() {
     }
   });
   if (!user || user.status !== "ACTIVE") throw new AuthorizationError("UNAUTHENTICATED", 401);
-  return { id: user.id, employeeNumber: user.employeeNumber, username: user.username, roles: new Set(user.roles.map(({ role }) => role.code)) };
+  const roles = new Set(user.roles.map(({ role }) => role.code));
+  if (roles.has("COLLECTOR")) roles.add("FILLER");
+  return { id: user.id, employeeNumber: user.employeeNumber, username: user.username, roles };
 }
 
 export async function requireCollector() {
