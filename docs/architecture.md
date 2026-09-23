@@ -102,7 +102,7 @@ P4 起初由 PPT Service 从不可变模板临时副本移除 `{{key}}` 并渲�
 
 ## 7. 安全边界
 
-- P3 使用 Auth.js Credentials 用户名/密码登录，不要求邮箱。JWT 仅证明用户 ID；每次业务请求重新检查用户状态、实时角色和资源关系，详见 ADR-0003、ADR-0007。
+- P3 使用 Auth.js Credentials 工号/密码登录，不要求邮箱。JWT 仅证明用户 ID；每次业务请求重新检查用户状态、实时角色和资源关系，详见 ADR-0003、ADR-0007 和 ADR-0014。
 - 浏览器永不直接调用 PPT Service；服务只暴露在 Compose 内网。
 - 所有业务 API 先认证，再做 task/fill-instance/file 资源校验。
 - 上传文件采用白名单、大小限制、ZIP bomb 防护、路径规范化和随机服务端文件名。

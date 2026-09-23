@@ -14,7 +14,7 @@ if (!baseUrl || !adminPassword || !fillerPassword || !outsiderPassword) {
   throw new Error("Set P4_SMOKE_BASE_URL and admin/filler/outsider password variables");
 }
 
-async function login(username, password) {
+async function login(employeeNumber, password) {
   const csrfResponse = await fetch(`${baseUrl}/api/auth/csrf`);
   assert.equal(csrfResponse.status, 200);
   const { csrfToken } = await csrfResponse.json();
@@ -22,12 +22,12 @@ async function login(username, password) {
   const response = await fetch(`${baseUrl}/api/auth/callback/credentials`, {
     method: "POST", redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: csrfCookies.join("; ") },
-    body: new URLSearchParams({ csrfToken, username, password, callbackUrl: baseUrl })
+    body: new URLSearchParams({ csrfToken, employeeNumber, password, callbackUrl: baseUrl })
   });
-  assert.equal(response.status, 302, `login failed for ${username}`);
+  assert.equal(response.status, 302, `login failed for ${employeeNumber}`);
   const cookie = response.headers.getSetCookie().map((value) => value.split(";")[0])
     .find((value) => value.includes("authjs.session-token="));
-  assert.ok(cookie, `session cookie missing for ${username}`);
+  assert.ok(cookie, `session cookie missing for ${employeeNumber}`);
   return cookie;
 }
 
@@ -51,9 +51,12 @@ let taskId;
 let changedMetric;
 let originalValue;
 try {
-  const admin = await login("admin", adminPassword);
-  const filler = await login("aaa", fillerPassword);
-  const outsider = await login("bbb", outsiderPassword);
+  const authUsers = await prisma.user.findMany({ where: { username: { in: ["admin", "aaa", "bbb"] } } });
+  const employeeNumber = (username) => authUsers.find((user) => user.username === username)?.employeeNumber;
+  assert.ok(employeeNumber("admin") && employeeNumber("aaa") && employeeNumber("bbb"), "admin/aaa/bbb users must exist");
+  const admin = await login(employeeNumber("admin"), adminPassword);
+  const filler = await login(employeeNumber("aaa"), fillerPassword);
+  const outsider = await login(employeeNumber("bbb"), outsiderPassword);
   await page(admin, "/data-sources");
   await page(admin, "/metrics");
   const template = await prisma.reportTemplate.findFirst({

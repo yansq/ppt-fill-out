@@ -8,8 +8,8 @@ import { AssignmentForm } from "./assignment-form";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const fillers = [
-  { id: "alice", username: "alice", name: "张三", status: "ACTIVE" },
-  { id: "bob", username: "bob", name: "李四", status: "ACTIVE" }
+  { id: "alice", employeeNumber: "100001", username: "alice", name: "张三", status: "ACTIVE" },
+  { id: "bob", employeeNumber: "100002", username: "bob", name: "李四", status: "ACTIVE" }
 ];
 const slides = [
   { id: "cover", slideIndex: 0, previewUrl: "/api/templates/t/slides/0/preview", placeholderCount: 0, assignments: [] },
@@ -29,10 +29,10 @@ describe("page assignment", () => {
     expect(screen.queryByRole("button", { name: "选择第 1 页填报人" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "选择第 2 页填报人" }));
-    fireEvent.change(screen.getByRole("searchbox", { name: "搜索第 2 页填报人" }), { target: { value: "李四" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索第 2 页填报人" }), { target: { value: "100002" } });
     const results = screen.getByRole("group", { name: "第 2 页可选填报人" });
-    expect(within(results).getByText("李四（bob）")).toBeTruthy();
-    expect(within(results).queryByText("张三（alice）")).toBeNull();
+    expect(within(results).getByText("李四（100002）")).toBeTruthy();
+    expect(within(results).queryByText("张三（100001）")).toBeNull();
     fireEvent.click(within(results).getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "保存页面分配" }));
 

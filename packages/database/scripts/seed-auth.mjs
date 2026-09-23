@@ -21,27 +21,35 @@ async function main() {
   ]);
 
   const username = process.env.AUTH_SEED_USERNAME?.trim().toLowerCase();
+  const employeeNumber = process.env.AUTH_SEED_EMPLOYEE_NUMBER?.trim();
   const password = process.env.AUTH_SEED_PASSWORD;
   const roleCode = process.env.AUTH_SEED_ROLE?.trim().toUpperCase();
-  if (!username && !password && !roleCode) {
-    process.stdout.write("COLLECTOR/FILLER roles seeded. Set AUTH_SEED_USERNAME, AUTH_SEED_PASSWORD and AUTH_SEED_ROLE to provision one user.\n");
+  if (!username && !employeeNumber && !password && !roleCode) {
+    process.stdout.write("COLLECTOR/FILLER roles seeded. Set AUTH_SEED_EMPLOYEE_NUMBER, AUTH_SEED_USERNAME, AUTH_SEED_PASSWORD and AUTH_SEED_ROLE to provision one user.\n");
     return;
   }
-  if (!username || !password || !["COLLECTOR", "FILLER"].includes(roleCode)) {
-    throw new Error("Set AUTH_SEED_USERNAME, AUTH_SEED_PASSWORD and AUTH_SEED_ROLE=COLLECTOR|FILLER together");
+  if (!employeeNumber || !username || !password || !["COLLECTOR", "FILLER"].includes(roleCode)) {
+    throw new Error("Set AUTH_SEED_EMPLOYEE_NUMBER, AUTH_SEED_USERNAME, AUTH_SEED_PASSWORD and AUTH_SEED_ROLE=COLLECTOR|FILLER together");
   }
   const minimumPasswordLength = process.env.AUTH_SEED_ALLOW_WEAK_PASSWORD === "1" ? 6 : 12;
-  if (username.length > 191 || /\s/.test(username) || password.length < minimumPasswordLength) {
-    throw new Error(`AUTH_SEED_USERNAME must be 1-191 non-whitespace characters and AUTH_SEED_PASSWORD must have at least ${minimumPasswordLength} characters`);
+  if (!/^\d{6}$/.test(employeeNumber) || username.length > 191 || /\s/.test(username) || password.length < minimumPasswordLength) {
+    throw new Error(`AUTH_SEED_EMPLOYEE_NUMBER must be exactly 6 digits, AUTH_SEED_USERNAME must be 1-191 non-whitespace characters, and AUTH_SEED_PASSWORD must have at least ${minimumPasswordLength} characters`);
   }
 
   const salt = randomBytes(16).toString("hex");
   const hash = (await scrypt(password, Buffer.from(salt, "hex"), 64)).toString("hex");
   await prisma.$transaction(async (tx) => {
     const role = await tx.role.findUniqueOrThrow({ where: { code: roleCode } });
+    const matchingUsers = await tx.user.findMany({
+      where: { OR: [{ employeeNumber }, { username }] },
+      select: { employeeNumber: true, username: true }
+    });
+    if (matchingUsers.some((user) => user.employeeNumber !== employeeNumber || user.username !== username)) {
+      throw new Error("AUTH_SEED_EMPLOYEE_NUMBER and AUTH_SEED_USERNAME must identify the same existing user");
+    }
     const user = await tx.user.upsert({
-      where: { username },
-      create: { username, name: username },
+      where: { employeeNumber },
+      create: { employeeNumber, username, name: username },
       update: { status: "ACTIVE" }
     });
     await tx.userCredential.upsert({
@@ -55,7 +63,7 @@ async function main() {
       update: {}
     });
   });
-  process.stdout.write(`Provisioned ${username} as ${roleCode}.\n`);
+  process.stdout.write(`Provisioned ${username} (${employeeNumber}) as ${roleCode}.\n`);
 }
 
 try {

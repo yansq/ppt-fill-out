@@ -4,7 +4,7 @@ import { z } from "zod";
 import { verifyPassword } from "./password";
 
 const credentialsSchema = z.object({
-  username: z.string().trim().min(1).max(191).regex(/^\S+$/).transform((value) => value.toLowerCase()),
+  employeeNumber: z.string().trim().regex(/^\d{6}$/),
   password: z.string().min(1).max(1024)
 });
 
@@ -16,7 +16,7 @@ export async function authenticateCredentials(input: unknown) {
   if (!parsed.success) return null;
 
   const user = await prisma.user.findUnique({
-    where: { username: parsed.data.username },
+    where: { employeeNumber: parsed.data.employeeNumber },
     include: { credential: true }
   });
   if (!user || user.status !== "ACTIVE" || !user.credential) return null;

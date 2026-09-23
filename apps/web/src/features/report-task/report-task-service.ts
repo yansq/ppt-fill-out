@@ -51,7 +51,7 @@ function findCollectorTask(taskId: string, collectorId: string) {
       },
       assignments: {
         include: {
-          assignee: { select: { id: true, username: true, name: true } },
+          assignee: { select: { id: true, employeeNumber: true, username: true, name: true } },
           fillInstance: { select: { id: true, status: true, version: true } }
         }
       }
@@ -166,8 +166,8 @@ export async function listAssignableFillers(existingAssigneeIds: string[] = []) 
       { status: "ACTIVE", roles: { some: { role: { code: "FILLER" } } } },
       { id: { in: existingAssigneeIds } }
     ] },
-    orderBy: { username: "asc" },
-    select: { id: true, username: true, name: true, status: true }
+    orderBy: [{ name: "asc" }, { username: "asc" }],
+    select: { id: true, employeeNumber: true, username: true, name: true, status: true }
   });
 }
 

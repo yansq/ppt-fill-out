@@ -4,6 +4,7 @@ import { Prisma, prisma } from "@report-platform/database";
 
 import { requireCollector } from "@/features/auth/authorization";
 import { ReportTaskError } from "@/features/report-task/report-task-service";
+import { readMetricSnapshot } from "@/features/metric/metric-service";
 
 import { completeSchema, decisionSchema, returnSchema, submissionStatus } from "./review-policy";
 
@@ -16,7 +17,7 @@ function invalid(message: string): never {
 }
 
 async function ownedTask(taskId: string, collectorId: string, tx: Prisma.TransactionClient = prisma) {
-  const task = await tx.reportTask.findFirst({ where: { id: taskId, collectorId }, select: { id: true, templateId: true, status: true, version: true } });
+  const task = await tx.reportTask.findFirst({ where: { id: taskId, collectorId }, select: { id: true, templateId: true, reportPeriod: true, status: true, version: true } });
   if (!task) throw new ReportTaskError("NOT_FOUND", "任务不存在", 404);
   return task;
 }
@@ -26,27 +27,32 @@ export async function getReview(taskId: string) {
   const task = await ownedTask(taskId, actor.id);
   const [slides, instances, finals] = await Promise.all([
     prisma.templateSlide.findMany({
-      where: { templateId: task.templateId, OR: [{ placeholders: { some: {} } }, { assignments: { some: { taskId } } }] },
+      where: { templateId: task.templateId },
       orderBy: { slideIndex: "asc" },
-      select: { id: true, slideIndex: true, placeholders: { orderBy: [{ key: "asc" }, { occurrenceIndex: "asc" }], select: { id: true, key: true, occurrenceIndex: true } } }
+      select: {
+        id: true, slideIndex: true, previewFileId: true, widthEmu: true, heightEmu: true,
+        placeholders: { orderBy: [{ key: "asc" }, { occurrenceIndex: "asc" }], select: { id: true, key: true, occurrenceIndex: true } }
+      }
     }),
     prisma.fillInstance.findMany({
       where: { taskId },
       select: {
         id: true, templateSlideId: true, status: true, version: true,
-        assignee: { select: { username: true, name: true } },
+        assignee: { select: { username: true, name: true, employeeNumber: true } },
         submittedValues: { orderBy: [{ submissionRevision: "desc" }, { submittedAt: "desc" }], select: { id: true, placeholderId: true, valueText: true, submissionRevision: true, sourceType: true, submittedAt: true } }
       }
     }),
-    prisma.finalValue.findMany({ where: { taskId }, select: { id: true, placeholderId: true, valueText: true, resolutionType: true, selectedSubmittedValueId: true, version: true, decidedAt: true } })
+    prisma.finalValue.findMany({ where: { taskId }, select: { id: true, placeholderId: true, valueText: true, resolutionType: true, selectedSubmittedValueId: true, sourceSnapshotJson: true, version: true, decidedAt: true } })
   ]);
   const finalByPlaceholder = new Map(finals.map((value) => [value.placeholderId, value]));
   return {
-    task: { id: task.id, status: task.status, version: task.version },
+    task: { id: task.id, reportPeriod: task.reportPeriod, status: task.status, version: task.version },
     slides: slides.map((slide) => {
       const slideInstances = instances.filter((instance) => instance.templateSlideId === slide.id);
       return {
         id: slide.id, slideIndex: slide.slideIndex,
+        previewUrl: slide.previewFileId ? `/api/templates/${task.templateId}/slides/${slide.slideIndex}/preview` : null,
+        slideAspectRatio: Number(slide.widthEmu) / Number(slide.heightEmu),
         instances: slideInstances.map((instance) => ({ id: instance.id, status: instance.status, version: instance.version, assignee: instance.assignee })),
         placeholders: slide.placeholders.map((placeholder) => {
           const submissions = slideInstances.flatMap((instance) => {
@@ -69,10 +75,19 @@ export async function getReview(taskId: string) {
 export async function decideFinalValue(taskId: string, placeholderId: string, input: unknown) {
   const actor = await requireCollector();
   const decision = decisionSchema.parse(input);
+  const currentTask = await ownedTask(taskId, actor.id);
+  if (currentTask.version !== decision.expectedVersion) conflict();
+  if (currentTask.status !== "FILLING" && currentTask.status !== "REVIEWING") invalid("任务当前不可填写最终值");
+  if (currentTask.status === "FILLING" && decision.resolutionType === "SELECTED_SUBMISSION") invalid("填报完成后才能采用提交值");
+  const metric = decision.resolutionType === "DATABASE_METRIC"
+    ? await readMetricSnapshot(decision.metricDefinitionId, decision.metricPeriod)
+    : null;
+  if (metric && !metric.valueText.trim()) throw new ReportTaskError("VALIDATION_ERROR", "该指标没有可用值", 400);
   await prisma.$transaction(async (tx) => {
     const task = await ownedTask(taskId, actor.id, tx);
     if (task.version !== decision.expectedVersion) conflict();
-    if (task.status !== "REVIEWING") invalid("任务当前不可审核");
+    if (task.status !== "FILLING" && task.status !== "REVIEWING") invalid("任务当前不可填写最终值");
+    if (task.status === "FILLING" && decision.resolutionType === "SELECTED_SUBMISSION") invalid("填报完成后才能采用提交值");
     const placeholder = await tx.templatePlaceholder.findFirst({
       where: { id: placeholderId, slide: { templateId: task.templateId } },
       select: { id: true, slideId: true }
@@ -92,21 +107,22 @@ export async function decideFinalValue(taskId: string, placeholderId: string, in
       if (latest?.id !== selected.id) throw new ReportTaskError("VALIDATION_ERROR", "不能采用旧版提交值", 400);
     }
     const changed = await tx.reportTask.updateMany({
-      where: { id: taskId, collectorId: actor.id, status: "REVIEWING", version: decision.expectedVersion },
+      where: { id: taskId, collectorId: actor.id, status: task.status, version: decision.expectedVersion },
       data: { version: { increment: 1 } }
     });
     if (changed.count !== 1) conflict();
     const previous = await tx.finalValue.findUnique({ where: { taskId_placeholderId: { taskId, placeholderId } } });
-    const valueText = selected?.valueText ?? (decision.resolutionType === "MANUAL" ? decision.valueText : "");
+    const valueText = selected?.valueText ?? metric?.valueText ?? (decision.resolutionType === "MANUAL" ? decision.valueText : "");
+    const snapshot = selected?.sourceSnapshotJson ?? metric;
     const next = await tx.finalValue.upsert({
       where: { taskId_placeholderId: { taskId, placeholderId } },
       create: {
         taskId, placeholderId, valueText, resolutionType: decision.resolutionType,
-        selectedSubmittedValueId: selected?.id, sourceSnapshotJson: selected?.sourceSnapshotJson ?? undefined, decidedById: actor.id
+        selectedSubmittedValueId: selected?.id, sourceSnapshotJson: snapshot ? snapshot as Prisma.InputJsonValue : undefined, decidedById: actor.id
       },
       update: {
         valueText, resolutionType: decision.resolutionType, selectedSubmittedValueId: selected?.id,
-        sourceSnapshotJson: selected?.sourceSnapshotJson ?? Prisma.DbNull,
+        sourceSnapshotJson: snapshot ? snapshot as Prisma.InputJsonValue : Prisma.DbNull,
         decidedById: actor.id, decidedAt: new Date(), version: { increment: 1 }
       }
     });
@@ -114,7 +130,7 @@ export async function decideFinalValue(taskId: string, placeholderId: string, in
       actorId: actor.id, action: "FINAL_VALUE_DECIDED", resourceType: "FinalValue", resourceId: next.id,
       taskId, correlationId: randomUUID(),
       beforeJson: previous ? { valueText: previous.valueText, resolutionType: previous.resolutionType, selectedSubmittedValueId: previous.selectedSubmittedValueId } : undefined,
-      afterJson: { valueText, resolutionType: decision.resolutionType, selectedSubmittedValueId: selected?.id ?? null }
+      afterJson: { valueText, resolutionType: decision.resolutionType, selectedSubmittedValueId: selected?.id ?? null, metricDefinitionId: metric?.definitionId ?? null, metricPeriod: metric?.period ?? null }
     } });
   });
   return getReview(taskId);

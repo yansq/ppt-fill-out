@@ -20,7 +20,7 @@ async function passwordHash(password) {
   return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 
-async function login(username, password) {
+async function login(employeeNumber, password) {
   const csrfResponse = await fetch(`${baseUrl}/api/auth/csrf`);
   assert.equal(csrfResponse.status, 200);
   const { csrfToken } = await csrfResponse.json();
@@ -32,13 +32,13 @@ async function login(username, password) {
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: csrfCookies.join("; ")
     },
-    body: new URLSearchParams({ csrfToken, username, password, callbackUrl: baseUrl })
+    body: new URLSearchParams({ csrfToken, employeeNumber, password, callbackUrl: baseUrl })
   });
-  assert.equal(response.status, 302, `login failed for ${username}`);
+  assert.equal(response.status, 302, `login failed for ${employeeNumber}`);
   const sessionCookie = response.headers.getSetCookie()
     .map((value) => value.split(";")[0])
     .find((value) => value.includes("authjs.session-token="));
-  assert.ok(sessionCookie, `session cookie missing for ${username}`);
+  assert.ok(sessionCookie, `session cookie missing for ${employeeNumber}`);
   return sessionCookie;
 }
 
@@ -87,6 +87,7 @@ try {
     const filler = await prisma.user.create({
       data: {
         email: `p3-smoke-${randomUUID()}@local.test`,
+        employeeNumber: `9${String(Date.now() + index).slice(-5)}`,
         username: `p3-smoke-${randomUUID()}`,
         name: `P3 Smoke Filler ${index + 1}`,
         credential: { create: { passwordHash: await passwordHash(fillerPasswords[index]) } },
@@ -96,11 +97,11 @@ try {
     fillerIds.push(filler.id);
   }
 
-  const collectorCookie = await login(collector.username, collectorPassword);
+  const collectorCookie = await login(collector.employeeNumber, collectorPassword);
   const fillerCookies = [];
   for (let index = 0; index < 2; index++) {
     const filler = await prisma.user.findUniqueOrThrow({ where: { id: fillerIds[index] } });
-    fillerCookies.push(await login(filler.username, fillerPasswords[index]));
+    fillerCookies.push(await login(filler.employeeNumber, fillerPasswords[index]));
   }
   await api(fillerCookies[0], "POST", "/api/report-tasks", {
     name: "forbidden", templateId: template.id, reportPeriod: "2026-09"

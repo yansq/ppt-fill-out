@@ -16,7 +16,7 @@ export default async function MetricsPage() {
   }
   if (!actor.roles.has("COLLECTOR")) redirect("/my-tasks");
 
-  return <WorkspaceShell collector filler={actor.roles.has("FILLER")} section="metrics" username={actor.username}><main className="page-container">
+  return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="metrics" username={actor.username}><main className="page-container">
     <header className="mb-8 flex items-start justify-between gap-4">
       <div>
         <p className="eyebrow">收集人 · 指标管理</p>

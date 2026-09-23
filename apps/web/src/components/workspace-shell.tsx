@@ -12,10 +12,11 @@ const collectorLinks = [
   { href: "/data-sources", label: "数据源", section: "sources" }
 ] as const;
 
-export function WorkspaceShell({ children, section, username, collector, filler }: {
+export function WorkspaceShell({ children, section, username, employeeNumber, collector, filler }: {
   children: React.ReactNode;
   section: Section;
   username: string;
+  employeeNumber: string;
   collector: boolean;
   filler: boolean;
 }) {
@@ -28,7 +29,7 @@ export function WorkspaceShell({ children, section, username, collector, filler 
           {links.map((link) => <Link aria-current={section === link.section ? "page" : undefined} className="workspace-nav-link" href={link.href} key={link.href}>{link.label}</Link>)}
           {collector && filler ? <Link aria-current={section === "mine" ? "page" : undefined} className="workspace-nav-link" href="/my-tasks">我的填报</Link> : null}
         </nav>
-        <div className="workspace-account"><span className="account-name">{username}</span><form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="account-signout" type="submit">退出</button></form></div>
+        <div className="workspace-account"><span className="account-name">{username}({employeeNumber})</span><form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="account-signout" type="submit">退出</button></form></div>
       </div>
     </header>
     <div className="workspace-content">{children}</div>

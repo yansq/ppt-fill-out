@@ -24,7 +24,7 @@ User --< OperationLog
 
 ### 认证与权限
 
-- `User(id, username, email?, name, status, createdAt, updatedAt)`；username 唯一且用于登录，email 可选、填写时唯一。既有用户的 email 在迁移时回填为 username。
+- `User(id, employeeNumber, username, email?, name, status, createdAt, updatedAt)`；employeeNumber 为唯一的 6 位数字工号并用于登录，username 保留为唯一的人员名称，email 可选、填写时唯一。既有用户迁移时按创建顺序回填唯一工号。
 - `Role(id, code, name)`；code 唯一，首版为 `COLLECTOR`、`FILLER`。
 - `UserRole(userId, roleId)`；复合唯一键。
 - P3 Credentials 身份源使用 `UserCredential(userId, passwordHash, failedAttempts, lockedUntil, updatedAt)`；密码与业务 User 分表。Auth.js 当前使用 JWT 会话，Account/Session/VerificationToken 为未来 OAuth/数据库会话保留。
@@ -36,6 +36,7 @@ User --< OperationLog
 - `TemplatePlaceholder(id, slideId, key, occurrenceIndex, shapeId, shapeName, shapeType, containerType, paragraphIndex, startRunIndex, startOffset, endRunIndex, endOffset, tableRow, tableColumn, xEmu, yEmu, widthEmu, heightEmu, originalText, styleJson)`；`(slideId, key, occurrenceIndex)` 唯一。
 
 模板记录一旦被任务引用即不可原地修改；重新上传产生新版本。
+用户删除模板时将状态改为 `ARCHIVED` 并从模板目录与新任务选择中隐藏；既有任务仍保留不可变模板、页面和文件引用，并可继续受权预览、生成与导出。版本号不因归档而复用，详见 ADR-0015。
 
 ### 任务与分配
 
@@ -51,6 +52,7 @@ P3 采用 `expectedVersion` 的目标分配集合替换；每个 `(taskId, templ
 - `PlaceholderBinding(id, fillInstanceId, placeholderId, sourceType, metricDefinitionId?, metricPeriod?, manualValue?, sourceSnapshotJson?, aiGenerationId?, formatOptionsJson?, version, updatedById, updatedAt)`；`(fillInstanceId, placeholderId)` 唯一。P4 的 `sourceSnapshotJson` 固定绑定时实际指标值、月份、来源版本与更新时间/人。
 - `SubmittedValue(id, fillInstanceId, placeholderId, valueText, sourceType, sourceSnapshotJson, bindingSnapshotJson, submittedById, submittedAt, submissionRevision)`；`(fillInstanceId, placeholderId, submissionRevision)` 唯一。
 - `FinalValue(id, taskId, placeholderId, valueText, resolutionType, selectedSubmittedValueId?, sourceSnapshotJson?, version, decidedById, decidedAt, updatedAt)`；`(taskId, placeholderId)` 唯一。
+- `FinalResolutionType` 包含 `DATABASE_METRIC`、`MANUAL`、`SELECTED_SUBMISSION`；前两种允许 Collector 在 `FILLING` 保存，指标值同时冻结来源快照，采用提交值仅限 `REVIEWING`。
 
 `resolutionType` 至少包含 `SELECTED_SUBMISSION`、`MANUAL`。数据库不把 SourceValue 只存成可变外键；SubmittedValue/FinalValue 必须带足以审计的不可变快照。
 

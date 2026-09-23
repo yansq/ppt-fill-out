@@ -10,16 +10,16 @@ if (!baseUrl || !process.env.P5_SMOKE_ADMIN_PASSWORD || !process.env.P5_SMOKE_FI
   throw new Error("Set P5_SMOKE_BASE_URL and admin/filler passwords");
 }
 
-async function login(username, password) {
+async function login(employeeNumber, password) {
   const csrfResponse = await fetch(`${baseUrl}/api/auth/csrf`);
   const { csrfToken } = await csrfResponse.json();
   const csrfCookies = csrfResponse.headers.getSetCookie().map((value) => value.split(";")[0]);
   const response = await fetch(`${baseUrl}/api/auth/callback/credentials`, {
     method: "POST", redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: csrfCookies.join("; ") },
-    body: new URLSearchParams({ csrfToken, username, password, callbackUrl: baseUrl })
+    body: new URLSearchParams({ csrfToken, employeeNumber, password, callbackUrl: baseUrl })
   });
-  assert.equal(response.status, 302, `login failed for ${username}`);
+  assert.equal(response.status, 302, `login failed for ${employeeNumber}`);
   const cookie = response.headers.getSetCookie().map((value) => value.split(";")[0]).find((value) => value.includes("authjs.session-token="));
   assert.ok(cookie);
   return cookie;
@@ -38,9 +38,12 @@ async function api(cookie, method, path, body, status) {
 
 let taskId;
 try {
-  const admin = await login("admin", process.env.P5_SMOKE_ADMIN_PASSWORD);
-  const aaa = await login("aaa", process.env.P5_SMOKE_FILLER_PASSWORD);
-  const bbb = await login("bbb", process.env.P5_SMOKE_FILLER_PASSWORD);
+  const authUsers = await prisma.user.findMany({ where: { username: { in: ["admin", "aaa", "bbb"] } } });
+  const employeeNumber = (username) => authUsers.find((user) => user.username === username)?.employeeNumber;
+  assert.ok(employeeNumber("admin") && employeeNumber("aaa") && employeeNumber("bbb"), "admin/aaa/bbb users must exist");
+  const admin = await login(employeeNumber("admin"), process.env.P5_SMOKE_ADMIN_PASSWORD);
+  const aaa = await login(employeeNumber("aaa"), process.env.P5_SMOKE_FILLER_PASSWORD);
+  const bbb = await login(employeeNumber("bbb"), process.env.P5_SMOKE_FILLER_PASSWORD);
   const template = await prisma.reportTemplate.findFirst({
     where: { createdBy: { username: "admin" }, status: "READY" },
     include: { slides: { include: { placeholders: true }, orderBy: { slideIndex: "asc" } } }
@@ -48,7 +51,7 @@ try {
   assert.ok(template);
   const slide = template.slides.find((item) => item.placeholders.length >= 2);
   assert.ok(slide);
-  const users = await prisma.user.findMany({ where: { username: { in: ["aaa", "bbb"] } } });
+  const users = authUsers.filter((user) => user.username === "aaa" || user.username === "bbb");
   const userId = (name) => users.find((user) => user.username === name).id;
   const created = await api(admin, "POST", "/api/report-tasks", { name: `P5 冒烟 ${randomUUID()}`, templateId: template.id, reportPeriod: "2026-09" }, 201);
   taskId = created.task.id;
@@ -56,6 +59,12 @@ try {
     expectedVersion: created.task.version,
     assignments: [{ slideId: slide.id, assigneeId: userId("aaa") }, { slideId: slide.id, assigneeId: userId("bbb") }]
   }, 200);
+  let earlyReview = await api(admin, "GET", `/api/report-tasks/${taskId}/review`, undefined, 200);
+  assert.equal(earlyReview.task.status, "FILLING");
+  earlyReview = await api(admin, "PUT", `/api/report-tasks/${taskId}/final-values/${slide.placeholders[0].id}`, {
+    expectedVersion: earlyReview.task.version, resolutionType: "MANUAL", valueText: "收集人预填"
+  }, 200);
+  assert.equal(earlyReview.slides.find((item) => item.id === slide.id).placeholders[0].finalValue.valueText, "收集人预填");
   const instances = await prisma.fillInstance.findMany({ where: { taskId }, include: { assignee: true } });
   const instance = (name) => instances.find((item) => item.assignee.username === name);
 
@@ -73,6 +82,7 @@ try {
   let review = await api(admin, "GET", `/api/report-tasks/${taskId}/review`, undefined, 200);
   const assignedSlide = (current) => current.slides.find((item) => item.id === slide.id);
   assert.equal(review.task.status, "REVIEWING");
+  assert.equal(assignedSlide(review).placeholders[0].finalValue.valueText, "收集人预填");
   assert.equal(assignedSlide(review).placeholders[0].status, "CONFLICT");
   const reviewPage = await fetch(`${baseUrl}/report-tasks/${taskId}`, { headers: { Cookie: admin } });
   assert.equal(reviewPage.status, 200, "review page did not render");

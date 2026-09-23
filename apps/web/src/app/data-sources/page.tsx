@@ -18,7 +18,7 @@ export default async function DataSourcesPage() {
   if (!actor.roles.has("COLLECTOR")) redirect("/my-tasks");
   const sources = await listDataSources();
 
-  return <WorkspaceShell collector filler={actor.roles.has("FILLER")} section="sources" username={actor.username}><main className="page-container">
+  return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="sources" username={actor.username}><main className="page-container">
     <header className="mb-8 flex items-start justify-between gap-4">
       <div>
         <p className="eyebrow">收集人 · 数据源</p>

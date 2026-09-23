@@ -25,19 +25,30 @@ describe("server-side actor authorization", () => {
 
   it("rejects a disabled user even with a valid session", async () => {
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    findUniqueMock.mockResolvedValue({ id: "user-1", username: "alice", status: "DISABLED", roles: [] });
+    findUniqueMock.mockResolvedValue({ id: "user-1", employeeNumber: "123456", username: "alice", status: "DISABLED", roles: [] });
     await expect(currentActor()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
   it("requires the current database role for Collector actions", async () => {
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    findUniqueMock.mockResolvedValue({ id: "user-1", username: "alice", status: "ACTIVE", roles: [{ role: { code: "FILLER" } }] });
+    findUniqueMock.mockResolvedValue({ id: "user-1", employeeNumber: "123456", username: "alice", status: "ACTIVE", roles: [{ role: { code: "FILLER" } }] });
     await expect(requireCollector()).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 
   it("requires the current database role for Filler actions", async () => {
     authMock.mockResolvedValue({ user: { id: "user-1" } });
-    findUniqueMock.mockResolvedValue({ id: "user-1", username: "alice", status: "ACTIVE", roles: [{ role: { code: "COLLECTOR" } }] });
+    findUniqueMock.mockResolvedValue({ id: "user-1", employeeNumber: "123456", username: "alice", status: "ACTIVE", roles: [{ role: { code: "COLLECTOR" } }] });
     await expect(requireFiller()).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
+  it("returns the employee number used by the workspace account label", async () => {
+    authMock.mockResolvedValue({ user: { id: "user-1" } });
+    findUniqueMock.mockResolvedValue({ id: "user-1", employeeNumber: "123456", username: "alice", status: "ACTIVE", roles: [] });
+
+    await expect(currentActor()).resolves.toMatchObject({
+      id: "user-1",
+      employeeNumber: "123456",
+      username: "alice"
+    });
   });
 });

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@report-platform/ui/button";
 
-type Filler = { id: string; username: string; name: string | null; status: string };
+type Filler = { id: string; employeeNumber: string; username: string; name: string | null; status: string };
 type Slide = {
   id: string;
   slideIndex: number;
@@ -16,9 +16,7 @@ type Slide = {
 };
 
 function fillerLabel(filler: Filler) {
-  return filler.name && filler.name !== filler.username
-    ? `${filler.name}（${filler.username}）`
-    : filler.username;
+  return `${filler.name || filler.username}（${filler.employeeNumber}）`;
 }
 
 function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
@@ -34,7 +32,7 @@ function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
   const assigned = fillers.filter((filler) => selected.has(`${slide.id}:${filler.id}`));
   const search = query.trim().toLocaleLowerCase("zh-CN");
   const matching = fillers.filter((filler) =>
-    `${filler.name ?? ""} ${filler.username}`.toLocaleLowerCase("zh-CN").includes(search)
+    `${filler.name ?? ""} ${filler.username} ${filler.employeeNumber}`.toLocaleLowerCase("zh-CN").includes(search)
   );
 
   return <article className="overflow-hidden rounded-xl border bg-card">
@@ -60,8 +58,8 @@ function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
           </div> : <p className="mb-4 text-sm muted">尚未选择填报人</p>}
           <Button aria-expanded={pickerOpen} aria-label={`选择第 ${pageNumber} 页填报人`} disabled={pending || fillers.length === 0} onClick={() => setPickerOpen((open) => !open)} type="button" variant="outline">{pickerOpen ? "收起人员列表" : "搜索并选择填报人"}</Button>
           {pickerOpen ? <div className="mt-3 rounded-lg border bg-background p-3">
-            <label className="grid gap-2 text-sm font-medium">搜索姓名或用户名
-              <input aria-label={`搜索第 ${pageNumber} 页填报人`} autoComplete="off" className="h-10 w-full rounded-md border bg-card px-3" onChange={(event) => setQuery(event.target.value)} placeholder="输入姓名或用户名" type="search" value={query} />
+            <label className="grid gap-2 text-sm font-medium">搜索姓名或工号
+              <input aria-label={`搜索第 ${pageNumber} 页填报人`} autoComplete="off" className="h-10 w-full rounded-md border bg-card px-3" onChange={(event) => setQuery(event.target.value)} placeholder="输入姓名或工号" type="search" value={query} />
             </label>
             <div aria-label={`第 ${pageNumber} 页可选填报人`} className="mt-3 max-h-52 overflow-y-auto" role="group">
               {matching.slice(0, 50).map((filler) => {

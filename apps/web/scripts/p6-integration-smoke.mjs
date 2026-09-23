@@ -12,16 +12,16 @@ if (!baseUrl || !process.env.P6_SMOKE_ADMIN_PASSWORD || !process.env.P6_SMOKE_FI
   throw new Error("Set P6_SMOKE_BASE_URL, admin/filler passwords and STORAGE_ROOT");
 }
 
-async function login(username, password) {
+async function login(employeeNumber, password) {
   const csrfResponse = await fetch(`${baseUrl}/api/auth/csrf`);
   const { csrfToken } = await csrfResponse.json();
   const csrfCookies = csrfResponse.headers.getSetCookie().map((value) => value.split(";")[0]);
   const response = await fetch(`${baseUrl}/api/auth/callback/credentials`, {
     method: "POST", redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: csrfCookies.join("; ") },
-    body: new URLSearchParams({ csrfToken, username, password, callbackUrl: baseUrl })
+    body: new URLSearchParams({ csrfToken, employeeNumber, password, callbackUrl: baseUrl })
   });
-  assert.equal(response.status, 302, `login failed for ${username}`);
+  assert.equal(response.status, 302, `login failed for ${employeeNumber}`);
   const cookie = response.headers.getSetCookie().map((value) => value.split(";")[0]).find((value) => value.includes("authjs.session-token="));
   assert.ok(cookie);
   return cookie;
@@ -40,8 +40,11 @@ async function api(cookie, method, pathname, body, status) {
 
 let taskId;
 try {
-  const admin = await login("admin", process.env.P6_SMOKE_ADMIN_PASSWORD);
-  const filler = await login("aaa", process.env.P6_SMOKE_FILLER_PASSWORD);
+  const authUsers = await prisma.user.findMany({ where: { username: { in: ["admin", "aaa"] } } });
+  const employeeNumber = (username) => authUsers.find((user) => user.username === username)?.employeeNumber;
+  assert.ok(employeeNumber("admin") && employeeNumber("aaa"), "admin/aaa users must exist");
+  const admin = await login(employeeNumber("admin"), process.env.P6_SMOKE_ADMIN_PASSWORD);
+  const filler = await login(employeeNumber("aaa"), process.env.P6_SMOKE_FILLER_PASSWORD);
   const template = await prisma.reportTemplate.findFirst({
     where: { createdBy: { username: "admin" }, status: "READY" },
     include: { sourceFile: true, slides: { include: { placeholders: true }, orderBy: { slideIndex: "asc" } } }

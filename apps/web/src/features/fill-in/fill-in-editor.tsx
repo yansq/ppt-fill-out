@@ -32,7 +32,7 @@ type EditorInstance = {
   previewUrl: string;
   draftPreviewUrl: string;
   slideAspectRatio: number;
-  task: { reportPeriod: string };
+  task: { id: string; reportPeriod: string };
   placeholders: {
     id: string;
     key: string;
@@ -48,6 +48,48 @@ type EditorInstance = {
     sourceSnapshotJson: unknown;
   }[];
 };
+
+const metricPeriodKey = (taskId: string) => `fill-metric-period:${taskId}`;
+const metricCacheKey = (taskId: string, period: string) =>
+  `fill-metrics:${taskId}:${period}`;
+
+function readSavedMetricPeriod(taskId: string) {
+  try {
+    const period = window.sessionStorage.getItem(metricPeriodKey(taskId));
+    return period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period) ? period : null;
+  } catch {
+    return null;
+  }
+}
+
+function readMetricCache(taskId: string, period: string) {
+  try {
+    const value = window.sessionStorage.getItem(metricCacheKey(taskId, period));
+    if (!value) return null;
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? (parsed as MetricOption[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMetricSession(
+  taskId: string,
+  period: string,
+  items?: MetricOption[],
+) {
+  try {
+    window.sessionStorage.setItem(metricPeriodKey(taskId), period);
+    if (items) {
+      window.sessionStorage.setItem(
+        metricCacheKey(taskId, period),
+        JSON.stringify(items),
+      );
+    }
+  } catch {
+    // Session storage is only an optimization; loading still works when it is unavailable.
+  }
+}
 
 function bindingValue(binding: EditorInstance["bindings"][number] | undefined) {
   if (!binding) return "";
@@ -75,6 +117,19 @@ export function FillInEditor({
   const [allPagesSubmitted, setAllPagesSubmitted] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const previewRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const period =
+        readSavedMetricPeriod(initialInstance.task.id) ??
+        initialInstance.task.reportPeriod;
+      const cached = readMetricCache(initialInstance.task.id, period);
+      setViewPeriod(period);
+      setMetrics(cached ?? []);
+      setLoadedPeriod(cached ? period : "");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialInstance.task.id, initialInstance.task.reportPeriod]);
 
   function locatePlaceholder(placeholderId: string) {
     if (highlightedId === placeholderId) {
@@ -108,13 +163,23 @@ export function FillInEditor({
       };
       if (!response.ok)
         throw new Error(payload.error?.message ?? "指标加载失败");
-      setMetrics(payload.items ?? []);
+      const items = payload.items ?? [];
+      setMetrics(items);
       setLoadedPeriod(viewPeriod);
+      saveMetricSession(instance.task.id, viewPeriod, items);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "指标服务暂时不可用");
     } finally {
       setBusy(false);
     }
+  }
+
+  function changeViewPeriod(period: string) {
+    const cached = readMetricCache(instance.task.id, period);
+    setViewPeriod(period);
+    setMetrics(cached ?? []);
+    setLoadedPeriod(cached ? period : "");
+    saveMetricSession(instance.task.id, period);
   }
 
   async function save(placeholderId: string, payload: Record<string, unknown>) {
@@ -199,32 +264,27 @@ export function FillInEditor({
             unsaved={dirtyIds.size > 0}
           />
         ) : null}
-        <section className="min-w-0 rounded-xl border bg-card p-4 xl:sticky xl:top-24" ref={previewRef}>
-          <h2 className="mb-3 text-lg font-semibold">PPT 页面预览</h2>
-          <PptPreviewImage
-            alt="当前 PPT 页的填报草稿预览"
-            fallbackSrc={highlightedId ? instance.draftPreviewUrl : instance.previewUrl}
-            aspectRatio={instance.slideAspectRatio}
-            key={previewUrl}
-            src={previewUrl}
-          />
-        </section>
         <div className="min-w-0 space-y-5">
+          <section className="rounded-xl border bg-card p-4" ref={previewRef}>
+            <h2 className="mb-3 text-lg font-semibold">PPT 页面预览</h2>
+            <PptPreviewImage
+              alt="当前 PPT 页的填报草稿预览"
+              fallbackSrc={
+                highlightedId ? instance.draftPreviewUrl : instance.previewUrl
+              }
+              aspectRatio={instance.slideAspectRatio}
+              key={previewUrl}
+              src={previewUrl}
+            />
+          </section>
           <section className="rounded-xl border bg-card p-5">
             <h2 className="text-lg font-semibold">引用数据库指标</h2>
-            <p className="mt-1 text-sm">
-              任务报告月份固定为 {instance.task.reportPeriod}
-              ；切换查看月份不会修改任务月份。
-            </p>
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <label className="grid gap-2 text-sm">
                 查看月份
                 <input
                   className="h-10 rounded-md border bg-background px-3"
-                  onChange={(event) => {
-                    setViewPeriod(event.target.value);
-                    setLoadedPeriod("");
-                  }}
+                  onChange={(event) => changeViewPeriod(event.target.value)}
                   type="month"
                   value={viewPeriod}
                 />
@@ -277,7 +337,9 @@ export function FillInEditor({
               </details>
             ) : null}
           </section>
+        </div>
 
+        <div className="min-w-0 space-y-5">
           <section className="rounded-xl border bg-card p-5">
             <h2 className="mb-4 text-lg font-semibold">填写内容</h2>
             <div className="space-y-4">
@@ -403,13 +465,21 @@ function PlaceholderEditor({
   const current = bindingValue(binding);
 
   return (
-    <div className={`rounded-md border p-4 text-sm ${highlighted ? "border-primary bg-accent/30" : ""}`}>
+    <div
+      className={`rounded-md border p-4 text-sm ${highlighted ? "border-primary bg-accent/30" : ""}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold">
           <code>{`{{${placeholder.key}}}`}</code> #
           {placeholder.occurrenceIndex + 1}
         </p>
-        <Button aria-pressed={highlighted} onClick={onLocate} size="sm" type="button" variant="outline">
+        <Button
+          aria-pressed={highlighted}
+          onClick={onLocate}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
           {highlighted ? "取消高亮" : "高亮文字"}
         </Button>
       </div>

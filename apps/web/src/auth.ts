@@ -9,7 +9,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        username: { label: "用户名", type: "text" },
+        employeeNumber: { label: "工号", type: "text" },
         password: { label: "密码", type: "password" }
       },
       authorize: authenticateCredentials

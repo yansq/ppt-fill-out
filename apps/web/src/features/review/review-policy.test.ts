@@ -14,5 +14,7 @@ describe("review policy", () => {
   it("requires a version and an explicit manual or submitted choice", () => {
     expect(decisionSchema.safeParse({ resolutionType: "MANUAL", valueText: "", expectedVersion: 0 }).success).toBe(false);
     expect(decisionSchema.safeParse({ resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId: "s1", expectedVersion: 0 }).success).toBe(true);
+    expect(decisionSchema.safeParse({ resolutionType: "DATABASE_METRIC", metricDefinitionId: "m1", metricPeriod: "2026-09", expectedVersion: 0 }).success).toBe(true);
+    expect(decisionSchema.safeParse({ resolutionType: "DATABASE_METRIC", metricDefinitionId: "m1", metricPeriod: "2026-13", expectedVersion: 0 }).success).toBe(false);
   });
 });

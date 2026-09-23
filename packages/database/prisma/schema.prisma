@@ -47,6 +47,7 @@ enum ValueSourceType {
 enum FinalResolutionType {
   SELECTED_SUBMISSION
   MANUAL
+  DATABASE_METRIC
 }
 
 enum DataSourceType {
@@ -92,14 +93,25 @@ enum GenerationStatus {
 }
 
 model User {
+  /// 记录主键
   id                    String               @id @default(cuid())
+  /// 登录用户名
   username              String               @unique @db.VarChar(191)
+  /// 6位工号，用于登录
+  employeeNumber        String               @unique @db.Char(6)
+  /// 电子邮箱，可为空
   email                 String?              @unique @db.VarChar(191)
+  /// 用户显示名称
   name                  String?              @db.VarChar(191)
+  /// 邮箱验证时间
   emailVerified         DateTime?
+  /// 用户头像地址
   image                 String?              @db.Text
+  /// 用户账号状态
   status                UserStatus           @default(ACTIVE)
+  /// 创建时间
   createdAt             DateTime             @default(now())
+  /// 更新时间
   updatedAt             DateTime             @updatedAt
   accounts              Account[]
   sessions              Session[]
@@ -112,35 +124,47 @@ model User {
   bindingsUpdated       PlaceholderBinding[] @relation("BindingUpdater")
   submittedValues       SubmittedValue[]     @relation("SubmittedBy")
   finalValues           FinalValue[]         @relation("FinalDecider")
-  dataSourcesCreated    DataSource[]          @relation("DataSourceCreator")
+  dataSourcesCreated    DataSource[]         @relation("DataSourceCreator")
   metricHistoryEntries  MetricValueHistory[] @relation("MetricHistoryOperator")
-  filesCreated          StoredFile[]          @relation("FileCreator")
-  generatedFilesCreated GeneratedFile[]       @relation("GeneratedFileCreator")
-  aiGenerations         AiGeneration[]        @relation("AiCreator")
-  operationLogs         OperationLog[]        @relation("OperationActor")
+  filesCreated          StoredFile[]         @relation("FileCreator")
+  generatedFilesCreated GeneratedFile[]      @relation("GeneratedFileCreator")
+  aiGenerations         AiGeneration[]       @relation("AiCreator")
+  operationLogs         OperationLog[]       @relation("OperationActor")
   credential            UserCredential?
 }
 
 model UserCredential {
+  /// 用户ID
   userId         String    @id
+  /// 带随机盐的密码哈希
   passwordHash   String    @db.VarChar(255)
+  /// 连续登录失败次数
   failedAttempts Int       @default(0)
+  /// 账号锁定截止时间
   lockedUntil    DateTime?
+  /// 更新时间
   updatedAt      DateTime  @updatedAt
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Role {
+  /// 记录主键
   id        String     @id @default(cuid())
+  /// 角色编码
   code      String     @unique @db.VarChar(64)
+  /// 角色名称
   name      String     @db.VarChar(191)
+  /// 创建时间
   createdAt DateTime   @default(now())
   users     UserRole[]
 }
 
 model UserRole {
+  /// 被授权用户ID
   userId     String
+  /// 角色ID
   roleId     String
+  /// 角色授予时间
   assignedAt DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -149,17 +173,29 @@ model UserRole {
 }
 
 model Account {
+  /// 记录主键
   id                String  @id @default(cuid())
+  /// 关联用户ID
   userId            String
+  /// 账号类型
   type              String  @db.VarChar(64)
+  /// 身份提供方
   provider          String  @db.VarChar(191)
+  /// 提供方账号ID
   providerAccountId String  @db.VarChar(191)
+  /// OAuth刷新令牌
   refresh_token     String? @db.Text
+  /// OAuth访问令牌
   access_token      String? @db.Text
+  /// 访问令牌到期时间戳
   expires_at        Int?
+  /// 令牌类型
   token_type        String? @db.VarChar(64)
+  /// 授权范围
   scope             String? @db.Text
+  /// OIDC身份令牌
   id_token          String? @db.Text
+  /// 提供方会话状态
   session_state     String? @db.VarChar(191)
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -168,9 +204,13 @@ model Account {
 }
 
 model Session {
+  /// 记录主键
   id           String   @id @default(cuid())
+  /// 数据库会话令牌
   sessionToken String   @unique @db.VarChar(191)
+  /// 会话用户ID
   userId       String
+  /// 会话到期时间
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -178,22 +218,34 @@ model Session {
 }
 
 model VerificationToken {
-  identifier String @db.VarChar(191)
-  token      String @unique @db.VarChar(191)
+  /// 验证对象标识
+  identifier String   @db.VarChar(191)
+  /// 一次性验证令牌
+  token      String   @unique @db.VarChar(191)
+  /// 令牌到期时间
   expires    DateTime
 
   @@unique([identifier, token])
 }
 
 model ReportTemplate {
+  /// 记录主键
   id            String          @id @default(cuid())
+  /// 模板名称
   name          String          @db.VarChar(191)
+  /// 模板业务版本号
   version       Int
+  /// 模板解析状态
   status        TemplateStatus  @default(UPLOADING)
+  /// 源文件ID
   sourceFileId  String          @unique
+  /// 模板源文件SHA-256摘要
   sha256        String          @db.Char(64)
+  /// PPT解析器版本
   parserVersion String?         @db.VarChar(64)
+  /// 创建人ID
   createdById   String
+  /// 创建时间
   createdAt     DateTime        @default(now())
   sourceFile    StoredFile      @relation("TemplateSourceFile", fields: [sourceFileId], references: [id], onDelete: Restrict)
   createdBy     User            @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -206,49 +258,77 @@ model ReportTemplate {
 }
 
 model TemplateSlide {
-  id              String                @id @default(cuid())
-  templateId      String
-  slideIndex      Int
-  widthEmu        BigInt
-  heightEmu       BigInt
-  previewFileId   String?               @unique
-  metadataJson    Json?
-  template        ReportTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  previewFile     StoredFile?           @relation("SlidePreviewFile", fields: [previewFileId], references: [id], onDelete: SetNull)
-  placeholders    TemplatePlaceholder[]
-  assignments     SlideAssignment[]
-  fillInstances   FillInstance[]
+  /// 记录主键
+  id            String                @id @default(cuid())
+  /// 报告模板ID
+  templateId    String
+  /// 模板页序号，从0开始
+  slideIndex    Int
+  /// 页面宽度（EMU）
+  widthEmu      BigInt
+  /// 页面高度（EMU）
+  heightEmu     BigInt
+  /// 预览文件ID
+  previewFileId String?               @unique
+  /// 页面解析元数据
+  metadataJson  Json?
+  template      ReportTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  previewFile   StoredFile?           @relation("SlidePreviewFile", fields: [previewFileId], references: [id], onDelete: SetNull)
+  placeholders  TemplatePlaceholder[]
+  assignments   SlideAssignment[]
+  fillInstances FillInstance[]
 
   @@unique([templateId, slideIndex])
 }
 
 model TemplatePlaceholder {
-  id               String               @id @default(cuid())
-  slideId          String
-  key              String               @db.VarChar(191)
-  occurrenceIndex  Int
-  shapeId          Int
-  shapeName        String?              @db.VarChar(191)
-  shapeType        String               @db.VarChar(64)
-  containerType    String               @db.VarChar(64)
-  paragraphIndex   Int?
-  startRunIndex    Int?
-  startOffset      Int?
-  endRunIndex      Int?
-  endOffset        Int?
-  tableRow         Int?
-  tableColumn      Int?
-  xEmu             BigInt
-  yEmu             BigInt
-  widthEmu         BigInt
-  heightEmu        BigInt
-  originalText     String               @db.Text
-  styleJson        Json?
-  slide            TemplateSlide        @relation(fields: [slideId], references: [id], onDelete: Restrict)
-  bindings         PlaceholderBinding[]
-  submittedValues  SubmittedValue[]
-  finalValues      FinalValue[]
-  aiGenerations    AiGeneration[]
+  /// 记录主键
+  id              String               @id @default(cuid())
+  /// 所属模板页ID
+  slideId         String
+  /// 占位符变量名
+  key             String               @db.VarChar(191)
+  /// 同名占位符出现序号
+  occurrenceIndex Int
+  /// PPT图形ID
+  shapeId         Int
+  /// PPT图形名称
+  shapeName       String?              @db.VarChar(191)
+  /// PPT图形类型
+  shapeType       String               @db.VarChar(64)
+  /// 占位符容器类型
+  containerType   String               @db.VarChar(64)
+  /// 文本段落序号
+  paragraphIndex  Int?
+  /// 起始文本片段序号
+  startRunIndex   Int?
+  /// 起始片段内字符偏移
+  startOffset     Int?
+  /// 结束文本片段序号
+  endRunIndex     Int?
+  /// 结束片段内字符偏移
+  endOffset       Int?
+  /// 表格行序号
+  tableRow        Int?
+  /// 表格列序号
+  tableColumn     Int?
+  /// 图形左上角横坐标（EMU）
+  xEmu            BigInt
+  /// 图形左上角纵坐标（EMU）
+  yEmu            BigInt
+  /// 图形宽度（EMU）
+  widthEmu        BigInt
+  /// 图形高度（EMU）
+  heightEmu       BigInt
+  /// 占位符原始文本
+  originalText    String               @db.Text
+  /// 占位符文字样式快照
+  styleJson       Json?
+  slide           TemplateSlide        @relation(fields: [slideId], references: [id], onDelete: Restrict)
+  bindings        PlaceholderBinding[]
+  submittedValues SubmittedValue[]
+  finalValues     FinalValue[]
+  aiGenerations   AiGeneration[]
 
   @@unique([slideId, key, occurrenceIndex])
   @@index([slideId, shapeId])
@@ -256,17 +336,26 @@ model TemplatePlaceholder {
 }
 
 model ReportTask {
-  id             String           @id @default(cuid())
-  name           String           @db.VarChar(191)
+  /// 记录主键
+  id             String            @id @default(cuid())
+  /// 报告任务名称
+  name           String            @db.VarChar(191)
+  /// 使用的模板ID
   templateId     String
-  reportPeriod   String           @db.Char(7)
-  status         ReportTaskStatus @default(DRAFT)
+  /// 报告月份，格式YYYY-MM
+  reportPeriod   String            @db.Char(7)
+  /// 报告任务状态
+  status         ReportTaskStatus  @default(DRAFT)
+  /// 收集人ID
   collectorId    String
-  version        Int              @default(0)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  template       ReportTemplate   @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  collector      User             @relation("TaskCollector", fields: [collectorId], references: [id], onDelete: Restrict)
+  /// 报告任务乐观锁版本号
+  version        Int               @default(0)
+  /// 创建时间
+  createdAt      DateTime          @default(now())
+  /// 更新时间
+  updatedAt      DateTime          @updatedAt
+  template       ReportTemplate    @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  collector      User              @relation("TaskCollector", fields: [collectorId], references: [id], onDelete: Restrict)
   assignments    SlideAssignment[]
   fillInstances  FillInstance[]
   finalValues    FinalValue[]
@@ -280,11 +369,17 @@ model ReportTask {
 }
 
 model SlideAssignment {
+  /// 记录主键
   id              String        @id @default(cuid())
+  /// 报告任务ID
   taskId          String
+  /// 模板页ID
   templateSlideId String
+  /// 填报人ID
   assigneeId      String
+  /// 分配操作人ID
   createdById     String
+  /// 创建时间
   createdAt       DateTime      @default(now())
   task            ReportTask    @relation(fields: [taskId], references: [id], onDelete: Restrict)
   templateSlide   TemplateSlide @relation(fields: [templateSlideId], references: [id], onDelete: Restrict)
@@ -297,21 +392,32 @@ model SlideAssignment {
 }
 
 model FillInstance {
-  id              String             @id @default(cuid())
-  assignmentId    String             @unique
+  /// 记录主键
+  id              String               @id @default(cuid())
+  /// 页面分配记录ID
+  assignmentId    String               @unique
+  /// 报告任务ID
   taskId          String
+  /// 模板页ID
   templateSlideId String
+  /// 填报人ID
   assigneeId      String
-  status          FillInstanceStatus @default(NOT_STARTED)
-  version         Int                @default(0)
+  /// 填报实例状态
+  status          FillInstanceStatus   @default(NOT_STARTED)
+  /// 填报实例乐观锁版本号
+  version         Int                  @default(0)
+  /// 提交时间
   submittedAt     DateTime?
+  /// 审核时间
   reviewedAt      DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  assignment      SlideAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
-  task            ReportTask         @relation(fields: [taskId], references: [id], onDelete: Restrict)
-  templateSlide   TemplateSlide      @relation(fields: [templateSlideId], references: [id], onDelete: Restrict)
-  assignee        User               @relation("FillInstanceAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  /// 创建时间
+  createdAt       DateTime             @default(now())
+  /// 更新时间
+  updatedAt       DateTime             @updatedAt
+  assignment      SlideAssignment      @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  task            ReportTask           @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  templateSlide   TemplateSlide        @relation(fields: [templateSlideId], references: [id], onDelete: Restrict)
+  assignee        User                 @relation("FillInstanceAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
   bindings        PlaceholderBinding[]
   submittedValues SubmittedValue[]
 
@@ -321,18 +427,31 @@ model FillInstance {
 }
 
 model PlaceholderBinding {
+  /// 记录主键
   id                 String              @id @default(cuid())
+  /// 填报实例ID
   fillInstanceId     String
+  /// 模板占位符ID
   placeholderId      String
+  /// 填报值来源类型
   sourceType         ValueSourceType
+  /// 绑定的指标定义ID
   metricDefinitionId String?
+  /// 绑定指标月份，格式YYYY-MM
   metricPeriod       String?             @db.Char(7)
+  /// 人工填报文本
   manualValue        String?             @db.Text
+  /// 数据来源快照
   sourceSnapshotJson Json?
+  /// AI生成记录ID
   aiGenerationId     String?
+  /// 值格式化选项
   formatOptionsJson  Json?
+  /// 绑定记录乐观锁版本号
   version            Int                 @default(0)
+  /// 更新人ID
   updatedById        String
+  /// 更新时间
   updatedAt          DateTime            @updatedAt
   fillInstance       FillInstance        @relation(fields: [fillInstanceId], references: [id], onDelete: Restrict)
   placeholder        TemplatePlaceholder @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
@@ -345,77 +464,124 @@ model PlaceholderBinding {
 }
 
 model SubmittedValue {
+  /// 记录主键
   id                  String              @id @default(cuid())
+  /// 填报实例ID
   fillInstanceId      String
+  /// 模板占位符ID
   placeholderId       String
+  /// 已提交的不可变文本值
   valueText           String              @db.LongText
+  /// 数据来源类型
   sourceType          ValueSourceType
+  /// 提交时来源快照
   sourceSnapshotJson  Json?
+  /// 提交时绑定配置快照
   bindingSnapshotJson Json
+  /// 提交人ID
   submittedById       String
+  /// 提交时间
   submittedAt         DateTime            @default(now())
+  /// 提交修订次数
   submissionRevision  Int
   fillInstance        FillInstance        @relation(fields: [fillInstanceId], references: [id], onDelete: Restrict)
   placeholder         TemplatePlaceholder @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
   submittedBy         User                @relation("SubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
-  selectedByFinal     FinalValue[]         @relation("SelectedSubmission")
+  selectedByFinal     FinalValue[]        @relation("SelectedSubmission")
 
   @@unique([fillInstanceId, placeholderId, submissionRevision])
   @@index([placeholderId, submittedAt])
 }
 
 model FinalValue {
-  id                       String                @id @default(cuid())
+  /// 记录主键
+  id                       String              @id @default(cuid())
+  /// 报告任务ID
   taskId                   String
+  /// 模板占位符ID
   placeholderId            String
-  valueText                String                @db.LongText
+  /// 审核确定的最终文本
+  valueText                String              @db.LongText
+  /// 最终值确定方式
   resolutionType           FinalResolutionType
+  /// 被选中的提交值ID
   selectedSubmittedValueId String?
+  /// 最终值来源快照
   sourceSnapshotJson       Json?
-  version                  Int                   @default(0)
+  /// 乐观锁版本号
+  version                  Int                 @default(0)
+  /// 最终值决定人ID
   decidedById              String
-  decidedAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
-  task                     ReportTask            @relation(fields: [taskId], references: [id], onDelete: Restrict)
-  placeholder              TemplatePlaceholder   @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
-  selectedSubmittedValue   SubmittedValue?       @relation("SelectedSubmission", fields: [selectedSubmittedValueId], references: [id], onDelete: Restrict)
-  decidedBy                User                  @relation("FinalDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  /// 最终值决定时间
+  decidedAt                DateTime            @default(now())
+  /// 更新时间
+  updatedAt                DateTime            @updatedAt
+  task                     ReportTask          @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  placeholder              TemplatePlaceholder @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
+  selectedSubmittedValue   SubmittedValue?     @relation("SelectedSubmission", fields: [selectedSubmittedValueId], references: [id], onDelete: Restrict)
+  decidedBy                User                @relation("FinalDecider", fields: [decidedById], references: [id], onDelete: Restrict)
 
   @@unique([taskId, placeholderId])
   @@index([selectedSubmittedValueId])
 }
 
 model DataSource {
-  id                   String           @id @default(cuid())
-  name                 String           @unique @db.VarChar(191)
+  /// 记录主键
+  id                   String             @id @default(cuid())
+  /// 数据源名称
+  name                 String             @unique @db.VarChar(191)
+  /// 数据源类型
   type                 DataSourceType
-  status               DataSourceStatus @default(ACTIVE)
-  host                 String?          @db.VarChar(255)
+  /// 数据源启用状态
+  status               DataSourceStatus   @default(ACTIVE)
+  /// 数据库主机地址
+  host                 String?            @db.VarChar(255)
+  /// 数据库端口
   port                 Int?
-  databaseName         String?          @db.VarChar(191)
-  username             String?          @db.VarChar(191)
-  encryptedPassword    String?          @db.Text
-  encryptionKeyVersion String?          @db.VarChar(64)
+  /// 数据库名称
+  databaseName         String?            @db.VarChar(191)
+  /// 连接用户名
+  username             String?            @db.VarChar(191)
+  /// 加密后的连接密码
+  encryptedPassword    String?            @db.Text
+  /// 加密密钥版本
+  encryptionKeyVersion String?            @db.VarChar(64)
+  /// 连接配置选项
   optionsJson          Json?
+  /// 创建人ID
   createdById          String
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  createdBy            User             @relation("DataSourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  /// 创建时间
+  createdAt            DateTime           @default(now())
+  /// 更新时间
+  updatedAt            DateTime           @updatedAt
+  createdBy            User               @relation("DataSourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
   metricDefinitions    MetricDefinition[]
 }
 
 model MetricDefinition {
+  /// 记录主键
   id               String               @id @default(cuid())
+  /// 数据源ID
   dataSourceId     String
+  /// 指标编码
   code             String               @db.VarChar(191)
+  /// 指标名称
   name             String               @db.VarChar(191)
+  /// 指标说明
   description      String?              @db.Text
+  /// 指标值类型
   valueType        MetricValueType
+  /// 指标单位
   unit             String?              @db.VarChar(64)
+  /// 是否允许修改源指标
   writable         Boolean              @default(false)
+  /// 指标查询配置
   queryConfigJson  Json
+  /// 指标更新配置
   updateConfigJson Json?
+  /// 创建时间
   createdAt        DateTime             @default(now())
+  /// 更新时间
   updatedAt        DateTime             @updatedAt
   dataSource       DataSource           @relation(fields: [dataSourceId], references: [id], onDelete: Restrict)
   values           MetricValue[]
@@ -426,16 +592,27 @@ model MetricDefinition {
 }
 
 model MetricValue {
+  /// 记录主键
   id                 String               @id @default(cuid())
+  /// 指标定义ID
   metricDefinitionId String
+  /// 数据月份，格式YYYY-MM
   period             String               @db.Char(7)
+  /// 指标维度组合摘要
   dimensionsHash     String               @db.Char(64)
+  /// 指标维度数据
   dimensionsJson     Json?
+  /// 指标文本值
   valueText          String               @db.LongText
+  /// 指标数值
   valueNumber        Decimal?             @db.Decimal(65, 18)
+  /// 源数据库记录版本
   sourceVersion      String?              @db.VarChar(191)
+  /// 源数据库更新时间
   sourceUpdatedAt    DateTime?
+  /// 平台指标镜像版本号
   version            Int                  @default(0)
+  /// 指标抓取时间
   fetchedAt          DateTime             @default(now())
   metricDefinition   MetricDefinition     @relation(fields: [metricDefinitionId], references: [id], onDelete: Restrict)
   history            MetricValueHistory[]
@@ -445,13 +622,21 @@ model MetricValue {
 }
 
 model MetricValueHistory {
+  /// 记录主键
   id              String      @id @default(cuid())
+  /// 指标值ID
   metricValueId   String
+  /// 变更前指标值快照
   oldValueJson    Json
+  /// 变更后指标值快照
   newValueJson    Json
+  /// 指标修改原因
   reason          String      @db.Text
+  /// 操作人ID
   operatorId      String
+  /// 修改时预期的旧版本号
   expectedVersion Int
+  /// 创建时间
   createdAt       DateTime    @default(now())
   metricValue     MetricValue @relation(fields: [metricValueId], references: [id], onDelete: Restrict)
   operator        User        @relation("MetricHistoryOperator", fields: [operatorId], references: [id], onDelete: Restrict)
@@ -460,36 +645,56 @@ model MetricValueHistory {
 }
 
 model StoredFile {
-  id                String           @id @default(cuid())
+  /// 记录主键
+  id                String          @id @default(cuid())
+  /// 存储文件用途
   category          FileCategory
-  storagePath       String           @unique @db.VarChar(768)
-  originalFilename  String           @db.VarChar(255)
-  mimeType          String           @db.VarChar(191)
+  /// 文件相对存储路径
+  storagePath       String          @unique @db.VarChar(768)
+  /// 上传时的原始文件名
+  originalFilename  String          @db.VarChar(255)
+  /// 文件MIME类型
+  mimeType          String          @db.VarChar(191)
+  /// 文件大小（字节）
   sizeBytes         BigInt
-  sha256            String           @db.Char(64)
+  /// 文件SHA-256摘要
+  sha256            String          @db.Char(64)
+  /// 创建人ID
   createdById       String
-  createdAt         DateTime         @default(now())
-  createdBy         User             @relation("FileCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  sourceForTemplate ReportTemplate?  @relation("TemplateSourceFile")
-  previewForSlide   TemplateSlide?   @relation("SlidePreviewFile")
-  generatedRecord   GeneratedFile?   @relation("GeneratedStoredFile")
+  /// 创建时间
+  createdAt         DateTime        @default(now())
+  createdBy         User            @relation("FileCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  sourceForTemplate ReportTemplate? @relation("TemplateSourceFile")
+  previewForSlide   TemplateSlide?  @relation("SlidePreviewFile")
+  generatedRecord   GeneratedFile?  @relation("GeneratedStoredFile")
 
   @@index([sha256, category])
 }
 
 model GeneratedFile {
-  id                 String           @id @default(cuid())
+  /// 记录主键
+  id                 String            @id @default(cuid())
+  /// 报告任务ID
   taskId             String
+  /// 生成文件类型
   type               GeneratedFileType
-  status             GenerationStatus @default(PENDING)
-  storedFileId       String?          @unique
+  /// 生成状态
+  status             GenerationStatus  @default(PENDING)
+  /// 存储文件ID
+  storedFileId       String?           @unique
+  /// 生成时的最终值快照
   valuesSnapshotJson Json
-  idempotencyKey     String           @unique @db.VarChar(191)
-  errorCode          String?          @db.VarChar(64)
+  /// 生成请求幂等键
+  idempotencyKey     String            @unique @db.VarChar(191)
+  /// 生成失败错误码
+  errorCode          String?           @db.VarChar(64)
+  /// 创建人ID
   createdById        String
-  createdAt          DateTime         @default(now())
+  /// 创建时间
+  createdAt          DateTime          @default(now())
+  /// 生成完成时间
   completedAt        DateTime?
-  task               ReportTask       @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  task               ReportTask        @relation(fields: [taskId], references: [id], onDelete: Restrict)
   storedFile         StoredFile?       @relation("GeneratedStoredFile", fields: [storedFileId], references: [id], onDelete: Restrict)
   createdBy          User              @relation("GeneratedFileCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
@@ -497,36 +702,58 @@ model GeneratedFile {
 }
 
 model AiGeneration {
-  id                String                @id @default(cuid())
+  /// 记录主键
+  id                String               @id @default(cuid())
+  /// 报告任务ID
   taskId            String
+  /// 关联占位符ID，可为空
   placeholderId     String?
-  promptTemplateKey String                @db.VarChar(191)
+  /// 提示词模板标识
+  promptTemplateKey String               @db.VarChar(191)
+  /// 生成输入快照
   inputSnapshotJson Json
-  provider          String                @db.VarChar(191)
-  model             String                @db.VarChar(191)
-  outputText        String                @db.LongText
-  acceptedText      String?               @db.LongText
+  /// AI服务提供方
+  provider          String               @db.VarChar(191)
+  /// AI模型名称
+  model             String               @db.VarChar(191)
+  /// AI原始输出
+  outputText        String               @db.LongText
+  /// 审核采纳的文本
+  acceptedText      String?              @db.LongText
+  /// 创建人ID
   createdById       String
-  createdAt         DateTime              @default(now())
-  task              ReportTask            @relation(fields: [taskId], references: [id], onDelete: Restrict)
-  placeholder       TemplatePlaceholder?  @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
-  createdBy         User                  @relation("AiCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  /// 创建时间
+  createdAt         DateTime             @default(now())
+  task              ReportTask           @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  placeholder       TemplatePlaceholder? @relation(fields: [placeholderId], references: [id], onDelete: Restrict)
+  createdBy         User                 @relation("AiCreator", fields: [createdById], references: [id], onDelete: Restrict)
   bindings          PlaceholderBinding[]
 
   @@index([taskId, createdAt])
 }
 
 model OperationLog {
+  /// 记录主键
   id            String      @id @default(cuid())
+  /// 操作用户ID
   actorId       String
+  /// 操作动作编码
   action        String      @db.VarChar(64)
+  /// 操作资源类型
   resourceType  String      @db.VarChar(64)
+  /// 操作资源ID
   resourceId    String      @db.VarChar(191)
+  /// 关联报告任务ID
   taskId        String?
+  /// 操作前数据快照
   beforeJson    Json?
+  /// 操作后数据快照
   afterJson     Json?
+  /// 操作附加信息
   metadataJson  Json?
+  /// 请求关联追踪ID
   correlationId String      @db.VarChar(191)
+  /// 创建时间
   createdAt     DateTime    @default(now())
   actor         User        @relation("OperationActor", fields: [actorId], references: [id], onDelete: Restrict)
   task          ReportTask? @relation(fields: [taskId], references: [id], onDelete: Restrict)

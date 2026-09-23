@@ -44,6 +44,7 @@ export default async function Home() {
   return (
     <WorkspaceShell
       collector={collector}
+      employeeNumber={actor.employeeNumber}
       filler={filler}
       section="home"
       username={actor.username}

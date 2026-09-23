@@ -18,7 +18,7 @@ const initialInstance = {
   previewUrl: "/preview",
   draftPreviewUrl: "/draft-preview?version=1",
   slideAspectRatio: 16 / 9,
-  task: { reportPeriod: "2026-09" },
+  task: { id: "task-1", reportPeriod: "2026-09" },
   placeholders: [{ id: "placeholder-1", key: "summary", occurrenceIndex: 0, originalText: "摘要" }],
   bindings: [{
     placeholderId: "placeholder-1", sourceType: "MANUAL_TEXT", manualValue: "已填写",
@@ -27,6 +27,7 @@ const initialInstance = {
 };
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
 });
@@ -54,6 +55,44 @@ describe("placeholder text highlight", () => {
     fireEvent.click(screen.getByRole("button", { name: "取消高亮" }));
     expect(screen.getByRole("img", { name: "当前 PPT 页的填报草稿预览" }).getAttribute("src"))
       .toContain("/draft-preview?version=1");
+  });
+});
+
+describe("metric placement and page switching", () => {
+  it("places database metrics directly below the PPT preview", () => {
+    render(<FillInEditor initialInstance={initialInstance} navigation={null} />);
+
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      "PPT 页面预览",
+      "引用数据库指标",
+      "填写内容"
+    ]);
+  });
+
+  it("restores loaded metrics when another page of the same task mounts", async () => {
+    const metric = {
+      definitionId: "metric-1",
+      code: "revenue",
+      name: "营业收入",
+      dataSource: { id: "source-1", name: "经营数据库" },
+      valueText: "100",
+      unit: "万元",
+      period: "2026-09",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      updatedBy: "admin",
+      version: 1
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [metric] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const firstPage = render(<FillInEditor initialInstance={initialInstance} navigation={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "加载该月指标" }));
+    await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
+    firstPage.unmount();
+
+    render(<FillInEditor initialInstance={{ ...initialInstance, id: "instance-2" }} navigation={null} />);
+    await waitFor(() => expect(screen.getByText("1 个可用指标")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
 

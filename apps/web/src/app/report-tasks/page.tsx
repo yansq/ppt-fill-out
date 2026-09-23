@@ -15,7 +15,7 @@ export default async function ReportTasksPage() {
   catch (error) { if (error instanceof AuthorizationError) redirect("/login?callbackUrl=/report-tasks"); throw error; }
   if (!actor.roles.has("COLLECTOR")) redirect("/my-tasks");
   const [tasks, templates] = await Promise.all([listCollectorReportTasks(), listReadyOwnedTemplates()]);
-  return <WorkspaceShell collector filler={actor.roles.has("FILLER")} section="tasks" username={actor.username}>
+  return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="tasks" username={actor.username}>
     <main className="page-container">
       <header className="page-heading"><div><p className="eyebrow">收集人 · 报告任务</p><h1>报告任务</h1><p className="muted">创建、分配、审核和导出都从任务中继续。</p></div></header>
       <section className="mb-9"><div className="section-heading"><div><h2>我的任务</h2><p>按创建时间排列，点击任务查看当前步骤</p></div><span className="muted text-sm">共 {tasks.length} 项</span></div>

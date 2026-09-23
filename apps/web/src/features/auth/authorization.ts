@@ -19,13 +19,14 @@ export async function currentActor() {
     where: { id: session.user.id },
     select: {
       id: true,
+      employeeNumber: true,
       username: true,
       status: true,
       roles: { select: { role: { select: { code: true } } } }
     }
   });
   if (!user || user.status !== "ACTIVE") throw new AuthorizationError("UNAUTHENTICATED", 401);
-  return { id: user.id, username: user.username, roles: new Set(user.roles.map(({ role }) => role.code)) };
+  return { id: user.id, employeeNumber: user.employeeNumber, username: user.username, roles: new Set(user.roles.map(({ role }) => role.code)) };
 }
 
 export async function requireCollector() {

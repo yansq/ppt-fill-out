@@ -335,8 +335,31 @@ export async function uploadTemplate(params: { name: string; file: File }) {
 export async function listTemplates() {
   const actor = await currentActor();
   const templates = await prisma.reportTemplate.findMany({
-    where: visibleTemplateWhere(actor),
+    where: { AND: [visibleTemplateWhere(actor), { status: { not: TemplateStatus.ARCHIVED } }] },
     orderBy: { createdAt: "desc" },
+    select: {
+      id: true, createdById: true, name: true, version: true, status: true, createdAt: true,
+      sourceFile: { select: { originalFilename: true } },
+      _count: { select: { slides: true, tasks: true } }
+    }
+  });
+  return templates.map((template) => ({
+    id: template.id,
+    createdById: template.createdById,
+    name: template.name,
+    version: template.version,
+    status: template.status,
+    originalFilename: template.sourceFile.originalFilename,
+    slideCount: template._count.slides,
+    taskCount: template._count.tasks,
+    createdAt: template.createdAt.toISOString()
+  }));
+}
+
+export async function getTemplateDetails(templateId: string) {
+  const actor = await currentActor();
+  const template = await prisma.reportTemplate.findFirst({
+    where: { id: templateId, ...visibleTemplateWhere(actor) },
     include: {
       sourceFile: true,
       slides: {
@@ -345,7 +368,39 @@ export async function listTemplates() {
       }
     }
   });
-  return templates.map((template) => templateDto(template));
+  if (!template) throw new TemplateUploadError("NOT_FOUND", "模板不存在", 404);
+  return templateDto(template);
+}
+
+export async function archiveTemplate(templateId: string) {
+  const actor = await requireCollector();
+  await prisma.$transaction(async (tx) => {
+    const template = await tx.reportTemplate.findFirst({
+      where: { id: templateId, createdById: actor.id },
+      select: { id: true, name: true, version: true, status: true }
+    });
+    if (!template || template.status === TemplateStatus.ARCHIVED) {
+      throw new TemplateUploadError("NOT_FOUND", "模板不存在", 404);
+    }
+    if (template.status === TemplateStatus.UPLOADING || template.status === TemplateStatus.PARSING) {
+      throw new TemplateUploadError("INVALID_STATE", "模板正在解析，请稍后再删除", 409);
+    }
+    const changed = await tx.reportTemplate.updateMany({
+      where: { id: templateId, createdById: actor.id, status: template.status },
+      data: { status: TemplateStatus.ARCHIVED }
+    });
+    if (changed.count !== 1) throw new TemplateUploadError("VERSION_CONFLICT", "模板状态已变化，请刷新后重试", 409);
+    await tx.operationLog.create({ data: {
+      actorId: actor.id,
+      action: "TEMPLATE_ARCHIVED",
+      resourceType: "ReportTemplate",
+      resourceId: templateId,
+      correlationId: randomUUID(),
+      beforeJson: { name: template.name, version: template.version, status: template.status },
+      afterJson: { status: TemplateStatus.ARCHIVED }
+    } });
+  });
+  return { id: templateId, status: TemplateStatus.ARCHIVED };
 }
 
 export async function retryTemplate(templateId: string) {

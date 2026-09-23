@@ -1,12 +1,10 @@
 import { WorkspaceShell } from "@/components/workspace-shell";
-import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
-import { templateStatusText } from "@/components/status";
 import { listTemplates } from "@/features/template/template-service";
 import { TemplateUploadForm } from "@/features/template/template-upload-form";
-import { TemplateRetryButton } from "@/features/template/template-retry-button";
+import { TemplateList } from "@/features/template/template-list";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +25,7 @@ export default async function TemplatesPage() {
   }
 
   return (
-    <WorkspaceShell collector={actor.roles.has("COLLECTOR")} filler={actor.roles.has("FILLER")} section="templates" username={actor.username}><main className="page-container">
+    <WorkspaceShell collector={actor.roles.has("COLLECTOR")} employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="templates" username={actor.username}><main className="page-container">
       <header className="page-heading">
         <div>
           <p className="eyebrow">收集人 · 模板管理</p>
@@ -40,7 +38,7 @@ export default async function TemplatesPage() {
 
       {actor.roles.has("COLLECTOR") ? <section className="surface" id="upload">
         <h2 className="text-lg font-semibold">上传模板</h2>
-        <p className="mb-6 mt-1 text-sm muted">在需要填写的位置使用 {"{{名称}}"} 标记。上传后请检查下方的页面预览。</p>
+        <p className="mb-6 mt-1 text-sm muted">在需要填写的位置使用 {"{{名称}}"} 标记。上传后可在模板列表中展开检查页面预览。</p>
         {databaseAvailable ? (
           <TemplateUploadForm />
         ) : (
@@ -50,70 +48,7 @@ export default async function TemplatesPage() {
         )}
       </section> : null}
 
-      <section className="mt-10">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">已上传模板</h2>
-          <span className="text-sm">{templates.length} 个版本</span>
-        </div>
-        {templates.length === 0 ? (
-          <div className="rounded-lg border bg-card p-8 text-center text-sm">暂无已解析模板</div>
-        ) : (
-          <div className="space-y-6">
-            {templates.map((template) => (
-              <article className="rounded-lg border bg-card p-6 shadow-sm" key={template.id}>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">
-                      {template.name} <span className="text-sm font-normal">第 {template.version} 版</span>
-                    </h3>
-                    <p className="mt-1 text-sm">
-                      {template.originalFilename} · {templateStatusText[template.status] ?? "待处理"}
-                    </p>
-                  </div>
-                  <span className="text-sm">{template.slides.length} 页</span>
-                </div>
-                {template.status === "PARSE_FAILED" && template.createdById === actor.id ? (
-                  <div className="mt-4">
-                    <TemplateRetryButton templateId={template.id} />
-                  </div>
-                ) : null}
-                <div className="mt-6 grid gap-4 lg:grid-cols-2">
-                  {template.slides.map((slide) => (
-                    <section className="rounded-md border bg-background p-4" key={slide.id}>
-                      <div className="mb-3 flex items-center justify-between">
-                        <h4 className="font-medium">第 {slide.slideIndex + 1} 页</h4>
-                        <span className="text-sm">{slide.placeholders.length} 个占位符</span>
-                      </div>
-                      {slide.previewUrl ? (
-                        <Image
-                          alt={`${template.name} 第 ${slide.slideIndex + 1} 页预览`}
-                          className="mb-4 h-auto w-full rounded border"
-                          height={270}
-                          src={slide.previewUrl}
-                          unoptimized
-                          width={480}
-                        />
-                      ) : null}
-                      {slide.placeholders.length === 0 ? (
-                        <p className="text-sm">无需动态填报</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {slide.placeholders.map((placeholder) => (
-                            <li className="rounded-md border px-3 py-2 text-sm" key={placeholder.id}>
-                              <code>{`{{${placeholder.key}}}`}</code>
-                              <span className="ml-2 muted">需要填写</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </section>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <TemplateList actorId={actor.id} canManage={actor.roles.has("COLLECTOR")} templates={templates} />
     </main></WorkspaceShell>
   );
 }

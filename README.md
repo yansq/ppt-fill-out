@@ -18,6 +18,7 @@
 - [P3 分配决策](docs/adr/0005-p3-assignment-replacement.md)：版本化集合替换与已开始实例保护
 - [内网 HTTP 入口决策](docs/adr/0006-intranet-http-auth-url.md)：允许无 HTTPS 的内网入口及边界控制
 - [用户名认证决策](docs/adr/0007-username-credentials.md)：用户名登录、可选邮箱与旧用户迁移
+- [工号认证决策](docs/adr/0014-employee-number-credentials.md)：6 位工号登录、账号预置与分发展示
 - [P4 数据源凭据决策](docs/adr/0008-p4-mysql-data-source-credentials.md)：指标库连接边界、加密和探测
 - [P4 示例指标与快照决策](docs/adr/0009-demo-metric-store-and-p4-snapshots.md)：测试库、绑定快照与跨库边界
 - [去字背景与镜像补偿决策](docs/adr/0010-static-preview-and-metric-reconciliation.md)：静态背景、源库历史对账
@@ -64,7 +65,7 @@ pnpm --filter @report-platform/database seed:auth
 pnpm dev
 ```
 
-`seed:auth` 无额外变量时仅创建 Collector/Filler 角色。创建登录用户时，在该命令的进程环境中同时设置 `AUTH_SEED_USERNAME`、`AUTH_SEED_PASSWORD`（默认至少 12 位）和 `AUTH_SEED_ROLE=COLLECTOR|FILLER`；不要将密码写入仓库文件或 shell 历史。它会为现有同用户名用户设置/重置密码。仅在隔离测试环境显式设置 `AUTH_SEED_ALLOW_WEAK_PASSWORD=1` 时允许至少 6 位密码。登录入口为 `/login`，使用用户名和密码，无邮箱格式要求；当前没有自助注册。必须设置足够长且保密的 `AUTH_SECRET`。`AUTH_URL` 应指向浏览器实际访问的 HTTP 或 HTTPS 地址，不能包含账号密码。
+`seed:auth` 无额外变量时仅创建 Collector/Filler 角色。预置登录用户时，在该命令的进程环境中同时设置 `AUTH_SEED_EMPLOYEE_NUMBER`（严格 6 位数字）、`AUTH_SEED_USERNAME`（姓名/用户名）、`AUTH_SEED_PASSWORD`（默认至少 12 位）和 `AUTH_SEED_ROLE=COLLECTOR|FILLER`；不要将密码写入仓库文件或 shell 历史。它会为现有同工号用户设置/重置密码。仅在隔离测试环境显式设置 `AUTH_SEED_ALLOW_WEAK_PASSWORD=1` 时允许至少 6 位密码。登录入口为 `/login`，使用工号和密码；当前没有自助注册。必须设置足够长且保密的 `AUTH_SECRET`。`AUTH_URL` 应指向浏览器实际访问的 HTTP 或 HTTPS 地址，不能包含账号密码。
 
 使用 `/data-sources` 前，还须设置 `ENCRYPTION_KEY` 为随机 32 字节密钥的 Base64 编码，例如在安全终端运行 `openssl rand -base64 32` 后将结果写入不纳入版本控制的部署密钥环境。所有运行中的 Web 实例必须使用同一密钥和 `ENCRYPTION_KEY_VERSION`。丢失密钥会导致既有数据源密码不可解密；不要直接更换版本或密钥，先按 ADR-0008 迁移密文。数据源表中只存加密凭据；浏览器到 Web 的无 HTTPS 流量仍须依赖内网隔离保护。
 

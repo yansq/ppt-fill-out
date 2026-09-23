@@ -21,13 +21,13 @@
 
 实际可采用 Route Handlers 或 Server Actions；无论传输形式如何，下列服务边界与授权规则保持一致。
 
-P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`。业务 API 从服务端会话取得用户 ID，不接受调用方提交的 `actorId`。无会话返回 401，无角色返回 403；无权访问的模板及其缩略图按 404 隐藏资源存在性。
+P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接收 6 位 `employeeNumber` 和 `password`。业务 API 从服务端会话取得用户 ID，不接受调用方提交的 `actorId`。无会话返回 401，无角色返回 403；无权访问的模板及其缩略图按 404 隐藏资源存在性。
 
 | 能力 | 建议接口 | 服务端授权 |
 |---|---|---|
 | 上传模板 | `POST /api/templates` | Collector |
-| 查询解析状态 | `GET /api/templates/{id}` | 创建者或有权任务成员 |
-| 查询模板页 | `GET /api/templates/{id}/slides` | 同上 |
+| 查询模板详情与模板页 | `GET /api/templates/{id}` | 创建者或有权任务成员 |
+| 删除模板 | `DELETE /api/templates/{id}` | 模板创建者 Collector |
 | 创建任务 | `POST /api/report-tasks` | Collector |
 | 任务列表与详情 | `GET /api/report-tasks`、`GET /api/report-tasks/{id}` | 任务 Collector |
 | 分配页面 | `PUT /api/report-tasks/{id}/assignments` | 任务 Collector |
@@ -53,6 +53,8 @@ Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{defin
 
 P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`，返回已移除占位符文字的 PNG；模板访问权限与常规预览相同，响应为私有缓存。`POST /api/metrics/{definitionId}/reconcile` 接收 `{ period }`，只允许 Collector；它按源库连续版本历史补齐平台镜像，响应包含 `appliedChanges`，版本缺口返回 `SYNC_HISTORY_GAP`，无新变更时幂等返回 0。
 
+模板管理页的 `GET /api/templates` 只返回未归档模板的摘要和页数、关联任务数；`GET /api/templates/{id}` 在展开时返回该模板全部页面、占位符和预览 URL，按创建者或关联任务成员授权。`DELETE /api/templates/{id}` 仅创建者 Collector 可调用，将非解析中的模板标为 `ARCHIVED` 并写审计日志；无 Collector 角色返回 403，非创建者返回 404，解析中或状态冲突返回 409。归档不删除任务及文件，既有任务仍可读取受权预览，且归档模板不再用于创建新任务。详见 ADR-0015。
+
 草稿预览改为 `GET /api/fill-instances/{id}/draft-preview?version={fillInstanceVersion}`，按实例权限读取已保存绑定值；版本不一致返回 409，他人实例返回 404。响应为 `image/png` 和 `private, no-store`，保存绑定后前端用新版本 URL 重新请求。
 
 P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名 Filler 分别对应独立 FillInstance；无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
@@ -61,7 +63,7 @@ P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由�
 
 `POST /api/fill-instances/{id}/submit` 成功返回 `{ instance, allAssignedPagesSubmitted }`；布尔值只统计当前填报人在同一任务中负责的页面，`SUBMITTED` 与 `REVIEWED` 视为已完成。
 
-P5 审核：`GET /api/report-tasks/{id}/review` 返回每页最新提交值、一致/冲突/缺失标识和当前 FinalValue；未分配但含占位符的模板页也列入审核，可由 Collector 手工确定值。`PUT /api/report-tasks/{id}/final-values/{placeholderId}` 接收 `{ expectedVersion, resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId }` 或 `{ expectedVersion, resolutionType: "MANUAL", valueText }`；版本是 ReportTask 版本，所选提交必须为本任务该占位符当前 revision。`POST /api/report-tasks/{id}/fill-instances/{instanceId}/return` 接收 `{ expectedVersion, reason }`，退回时清除同页 FinalValue；`POST /api/report-tasks/{id}/review` 接收 `{ expectedVersion }` 完成审核，要求全部实例已提交且**模板全部占位符**都有 FinalValue。状态或版本冲突返回 409。
+P5 审核：`GET /api/report-tasks/{id}/review` 返回报告月份、每页最新提交值、一致/冲突/缺失标识和当前 FinalValue；未分配但含占位符的模板页也列入审核，可由 Collector 自行填写。`PUT /api/report-tasks/{id}/final-values/{placeholderId}` 接收 `{ expectedVersion, resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId }`、`{ expectedVersion, resolutionType: "MANUAL", valueText }` 或 `{ expectedVersion, resolutionType: "DATABASE_METRIC", metricDefinitionId, metricPeriod }`；人工值与指标值允许在 `FILLING` 或 `REVIEWING` 保存，指标服务端重读并冻结快照，采用提交值仅限 `REVIEWING`。版本是 ReportTask 版本，所选提交必须为本任务该占位符当前 revision。`POST /api/report-tasks/{id}/fill-instances/{instanceId}/return` 接收 `{ expectedVersion, reason }`，退回时清除同页 FinalValue；`POST /api/report-tasks/{id}/review` 接收 `{ expectedVersion }` 完成审核，要求全部实例已提交且**模板全部占位符**都有 FinalValue。状态或版本冲突返回 409。
 
 P6 生成：`GET /api/report-tasks/{id}/generate` 返回任务状态/版本及已完成文件列表（PPTX、PDF、逐页 PNG，包含 SHA-256、大小、预览 URL、版式警告）。`POST /api/report-tasks/{id}/generate` 接收 `{ expectedVersion, idempotencyKey: UUID }`；仅任务 Collector 且任务为 `COMPLETED`/`EXPORTED` 可调用。相同键重试返回已完成结果，进行中/失败的键不可复用；缺少 FinalValue 返回 `MISSING_FINAL_VALUES`。生成前持久化 FinalValue、模板 SHA-256 和任务版本快照，输出与指标库后续变化无关。`POST /api/report-tasks/{id}/exports` 接收 `{ generatedFileId }`，仅对本任务已完成 PPTX/PDF 返回 `{ downloadUrl }` 并写导出审计，首次导出使任务进入 `EXPORTED`。`GET /api/files/{fileId}` 校验任务归属、文件大小和 SHA-256；PNG/PDF 默认行内预览，`?download=1` 下载，PPTX 总是下载。
 

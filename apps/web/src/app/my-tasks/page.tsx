@@ -29,6 +29,7 @@ export default async function MyTasksPage() {
   return (
     <WorkspaceShell
       collector={actor.roles.has("COLLECTOR")}
+      employeeNumber={actor.employeeNumber}
       filler
       section="mine"
       username={actor.username}
