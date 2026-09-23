@@ -21,13 +21,13 @@ export default async function ReportTaskDetailPage({ params }: { params: Promise
     if (error instanceof ReportTaskError || error instanceof AuthorizationError) notFound();
     throw error;
   }
-  const fillers = await listAssignableFillers(task.slides.flatMap((slide) => slide.assignments.map((assignment) => assignment.assignee.id)));
-  const review = await getReview(taskId);
-  const actor = await currentActor();
   const isDraft = task.status === "DRAFT";
   const isFilling = task.status === "FILLING";
   const canAssign = task.status === "DRAFT" || task.status === "FILLING";
   const canViewGeneration = task.status === "COMPLETED" || task.status === "EXPORTED";
+  const fillers = canAssign ? await listAssignableFillers(task.slides.flatMap((slide) => slide.assignments.map((assignment) => assignment.assignee.id))) : [];
+  const review = isDraft ? null : await getReview(taskId);
+  const actor = await currentActor();
 
   return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="tasks" username={actor.username}><main className="page-container fill-page-container">
     <header className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b pb-4">
@@ -49,7 +49,7 @@ export default async function ReportTaskDetailPage({ params }: { params: Promise
       <h2 className="mb-4 text-xl font-semibold">按页分配填报人</h2>
       <AssignmentForm fillers={fillers} key={`${task.id}-${task.version}`} slides={task.slides} taskId={task.id} version={task.version} />
     </section> : null}
-    <div id="review"><ReviewPanel initial={review} /></div>
+    {review ? <div id="review"><ReviewPanel initial={review} /></div> : null}
     {isFilling ? <details className="mt-8 rounded-lg border bg-card p-6" id="assignments">
       <summary className="cursor-pointer text-lg font-semibold">调整页面分配</summary>
       <div className="mt-5"><AssignmentForm fillers={fillers} key={`${task.id}-${task.version}`} slides={task.slides} taskId={task.id} version={task.version} /></div>
