@@ -30,22 +30,22 @@ export default async function ReportTaskDetailPage({ params }: { params: Promise
   const canViewGeneration = task.status === "COMPLETED" || task.status === "EXPORTED";
 
   return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="tasks" username={actor.username}><main className="page-container fill-page-container">
-    <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <p className="eyebrow">报告任务 · {task.reportPeriod}</p>
-        <h1 className="text-3xl font-semibold">{task.name}</h1>
-        <p className="mt-2 muted text-sm">{task.template.name} · 第 {task.template.version} 版模板 · {taskStatusText[task.status]}</p>
+    <header className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b pb-4">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-primary">报告任务 · {task.reportPeriod}</p>
+        <h1 className="truncate text-2xl font-semibold">{task.name}</h1>
+        <p className="muted text-sm">{task.template.name} · 第 {task.template.version} 版模板 · {taskStatusText[task.status]}</p>
       </div>
+      {canAssign || canViewGeneration ? <nav aria-label="任务操作" className="flex flex-wrap items-center gap-2 text-sm">
+        {canAssign ? <a className="status-pill" href="#assignments">{isFilling ? "调整页面分配" : "页面分配"}</a> : null}
+        {canViewGeneration ? <a className="status-pill" href={`/report-tasks/${task.id}/generation`}>生成与导出</a> : null}
+      </nav> : null}
     </header>
-    <div className="step-note mb-6"><strong>当前需要：</strong>{taskNextStep(task.status)}。{task.status === "FILLING" ? "等待填报人提交后即可审核。" : task.status === "REVIEWING" ? "逐项确认最终值，完成审核后生成报告。" : null}</div>
-    <nav aria-label="任务步骤" className="mb-6 flex flex-wrap gap-2 text-sm">{canAssign ? <a className="status-pill" href="#assignments">1 {isFilling ? "调整页面分配" : "页面分配"}</a> : <span className="status-pill">1 已分配</span>}<a className="status-pill" href="#review">2 {isFilling ? "逐页填报情况" : "页面状态与审核"}</a>{canViewGeneration ? <a className="status-pill" href={`/report-tasks/${task.id}/generation`}>3 生成导出</a> : <span className="status-pill">3 等待生成</span>}</nav>
-    <section className="grid gap-4 rounded-lg border bg-card p-6 sm:grid-cols-4">
-      <div><p className="text-sm">总实例</p><p className="text-2xl font-semibold">{task.progress.total}</p></div>
-      <div><p className="text-sm">已开始</p><p className="text-2xl font-semibold">{task.progress.started}</p></div>
-      <div><p className="text-sm">已提交</p><p className="text-2xl font-semibold">{task.progress.submitted}</p></div>
-      <div><p className="text-sm">提交进度</p><p className="text-2xl font-semibold">{task.progress.percent}%</p></div>
-    </section>
-    {isDraft ? <section className="mt-8 rounded-lg border bg-card p-6" id="assignments">
+    <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+      <p><strong className="font-semibold text-primary">当前需要：</strong>{taskNextStep(task.status)}</p>
+      <p className="muted">已提交 {task.progress.submitted}/{task.progress.total} 人 · 已开始 {task.progress.started} 人 · 提交进度 {task.progress.percent}%</p>
+    </div>
+    {isDraft ? <section className="mb-4 rounded-lg border bg-card p-6" id="assignments">
       <h2 className="mb-4 text-xl font-semibold">按页分配填报人</h2>
       <AssignmentForm fillers={fillers} key={`${task.id}-${task.version}`} slides={task.slides} taskId={task.id} version={task.version} />
     </section> : null}

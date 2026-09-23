@@ -97,8 +97,8 @@ export function ReviewPanel({ initial }: { initial: Review }) {
   const submittedCount = review.slides.reduce((count, slide) => count + slide.instances.filter((instance) => instance.status === "SUBMITTED" || instance.status === "REVIEWED").length, 0);
   const selectedSlide = review.slides.find((slide) => slide.id === selectedSlideId) ?? review.slides[0];
 
-  return <section className="mt-10">
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+  return <section>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-xl font-semibold">{isFilling ? "逐页填报情况" : "页面状态与审核"}</h2><p className="mt-1 text-sm">{isFilling ? `已提交 ${submittedCount}/${assignedCount} 人 · 收集人已填 ${decidedCount}/${requiredCount} 项` : `已确认 ${decidedCount}/${requiredCount} 项`} · {taskStatusText[review.task.status]}</p></div>
       <div className="flex flex-wrap items-center gap-2">
         {canReview ? <Button disabled={busy || requiredCount === 0 || decidedCount !== requiredCount} onClick={() => mutate(`/api/report-tasks/${review.task.id}/review`, "POST", {})} type="button">完成审核</Button> : review.task.status === "COMPLETED" || review.task.status === "EXPORTED" ? <span className="status-pill">审核已完成</span> : null}

@@ -76,7 +76,7 @@ a, button, input, select, textarea { transition: border-color .15s, background-c
 .account-signout { cursor: pointer; color: var(--primary); font-weight: 600; }
 .workspace-content { min-width: 0; }
 .page-container { max-width: 1200px; margin: auto; padding: 42px 32px 80px; }
-.fill-page-container { max-width: 1600px; }
+.fill-page-container { max-width: 1600px; padding-top: 24px; }
 .fill-page-grid { display: grid; align-items: start; gap: 20px; }
 .ppt-preview-image { aspect-ratio: var(--preview-aspect-ratio, 16 / 9); }
 .ppt-preview-loading { background: linear-gradient(145deg, #123e39, #10282c); color: #fff; }
@@ -135,5 +135,5 @@ a, button, input, select, textarea { transition: border-color .15s, background-c
 .login-form input { width: 100%; height: 46px; padding: 0 13px; border: 1px solid var(--input); border-radius: 9px; background: #fff; }
 .login-form button { height: 46px; margin-top: 5px; }
 .form-error { color: #b42318; font-size: 13px; }
-@media (max-width: 800px) { .workspace-header-inner { flex-wrap: wrap; gap: 0 14px; padding: 12px 18px; }.workspace-nav { order: 3; flex-basis: 100%; margin-top: 9px; }.workspace-account { margin-left: auto; }.page-container { padding: 28px 18px 60px; }.process-grid { grid-template-columns: repeat(2, 1fr); }.hero-card { align-items: start; flex-direction: column; }.login-page { grid-template-columns: 1fr; }.login-intro { padding: 36px 24px; }.login-intro h1 { font-size: 30px; }.login-mark, .login-steps { display: none; }.login-intro > p:not(.eyebrow) { margin-top: 10px; }.login-card { padding: 50px 0; } }
+@media (max-width: 800px) { .workspace-header-inner { flex-wrap: wrap; gap: 0 14px; padding: 12px 18px; }.workspace-nav { order: 3; flex-basis: 100%; margin-top: 9px; }.workspace-account { margin-left: auto; }.page-container { padding: 28px 18px 60px; }.fill-page-container { padding-top: 18px; }.process-grid { grid-template-columns: repeat(2, 1fr); }.hero-card { align-items: start; flex-direction: column; }.login-page { grid-template-columns: 1fr; }.login-intro { padding: 36px 24px; }.login-intro h1 { font-size: 30px; }.login-mark, .login-steps { display: none; }.login-intro > p:not(.eyebrow) { margin-top: 10px; }.login-card { padding: 50px 0; } }
 @media (max-width: 520px) { .process-grid { grid-template-columns: 1fr 1fr; }.process-grid li { padding: 15px; }.page-heading { align-items: start; flex-direction: column; }.task-row { flex-wrap: wrap; gap: 8px; }.task-row-main { flex-basis: 100%; }.task-next { min-width: 0; margin-left: auto; }.account-name { display: none; } }
