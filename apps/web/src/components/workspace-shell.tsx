@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { signOut } from "@/auth";
 
-type Section = "home" | "tasks" | "mine" | "templates" | "metrics" | "sources";
+type Section = "home" | "tasks" | "mine" | "templates" | "metrics" | "sources" | "account";
 
 const collectorLinks = [
   { href: "/", label: "工作台", section: "home" },
@@ -29,7 +29,7 @@ export function WorkspaceShell({ children, section, username, employeeNumber, co
           {links.map((link) => <Link aria-current={section === link.section ? "page" : undefined} className="workspace-nav-link" href={link.href} key={link.href}>{link.label}</Link>)}
           {collector && filler ? <Link aria-current={section === "mine" ? "page" : undefined} className="workspace-nav-link" href="/my-tasks">我的填报</Link> : null}
         </nav>
-        <div className="workspace-account"><span className="account-name">{username}({employeeNumber})</span><form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="account-signout" type="submit">退出</button></form></div>
+        <div className="workspace-account"><span className="account-name">{username}({employeeNumber})</span><Link aria-current={section === "account" ? "page" : undefined} className="account-signout" href="/account/password">修改密码</Link><form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="account-signout" type="submit">退出</button></form></div>
       </div>
     </header>
     <div className="workspace-content">{children}</div>

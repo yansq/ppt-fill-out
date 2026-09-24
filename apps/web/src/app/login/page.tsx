@@ -3,12 +3,12 @@ import { redirect } from "next/navigation";
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
 import { LoginForm } from "@/features/auth/login-form";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ callbackUrl?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ callbackUrl?: string; passwordChanged?: string }> }) {
   let signedIn = false;
   try { await currentActor(); signedIn = true; }
   catch (error) { if (!(error instanceof AuthorizationError)) throw error; }
   if (signedIn) redirect("/");
-  const { callbackUrl } = await searchParams;
+  const { callbackUrl, passwordChanged } = await searchParams;
   const destination = callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
   return <main className="login-page">
     <section className="login-intro">
@@ -22,6 +22,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <p className="eyebrow">欢迎使用</p>
       <h2>登录工作台</h2>
       <p className="muted mt-2">使用分配给你的账号继续工作。</p>
+      {passwordChanged === "1" ? <p className="mt-4 text-sm text-primary" role="status">密码已修改，请使用新密码重新登录。</p> : null}
       <LoginForm callbackUrl={destination} />
     </section>
   </main>;

@@ -1,7 +1,13 @@
-import { scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
+
+export async function hashPassword(password: string) {
+  const salt = randomBytes(16);
+  const hash = (await scrypt(password, salt, 64)) as Buffer;
+  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
 
 export async function verifyPassword(password: string, storedHash: string) {
   const [algorithm, saltHex, hashHex] = storedHash.split(":");

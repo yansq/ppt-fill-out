@@ -23,6 +23,8 @@
 
 P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接收 6 位 `employeeNumber` 和 `password`。业务 API 从服务端会话取得用户 ID，不接受调用方提交的 `actorId`。无会话返回 401，无角色返回 403；无权访问的模板及其缩略图按 404 隐藏资源存在性。
 
+已登录用户可调用 `PUT /api/account/password` 修改自己的密码，请求为 `{ currentPassword, newPassword, confirmPassword }`。新密码要求 6–1024 位、两次输入一致且不同于当前密码；服务端先校验当前密码，再写入新的随机盐 scrypt 哈希，不接受用户 ID 参数。错误的当前密码计入账号连续失败次数，达到 5 次时锁定 15 分钟；成功后清除失败次数。修改事件写操作日志，但不记录密码或哈希。前端收到成功响应后调用 Auth.js 退出登录，并跳转至登录页提示使用新密码。
+
 | 能力 | 建议接口 | 服务端授权 |
 |---|---|---|
 | 上传模板 | `POST /api/templates` | Collector |
