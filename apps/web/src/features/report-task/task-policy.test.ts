@@ -24,6 +24,14 @@ describe("report task policy", () => {
         { slideId: "slide-1", assigneeId: "alice" }
       ]
     }).success).toBe(false);
+    expect(replaceAssignmentsSchema.safeParse({
+      expectedVersion: 0,
+      assignments: [{ slideId: "slide-1", employeeNumber: "001234" }]
+    }).success).toBe(true);
+    expect(replaceAssignmentsSchema.safeParse({
+      expectedVersion: 0,
+      assignments: [{ slideId: "slide-1", employeeNumber: "1234" }]
+    }).success).toBe(false);
   });
 
   it("reports assigned, started and submitted progress separately", () => {

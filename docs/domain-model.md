@@ -28,6 +28,7 @@ User --< OperationLog
 - `Role(id, code, name)`；code 唯一，首版为 `COLLECTOR`、`FILLER`。
 - `UserRole(userId, roleId)`；复合唯一键。有效权限中 `COLLECTOR` 继承 `FILLER`，无需为收集人额外写入角色关系；填报实例仍按 assigneeId 授权，详见 ADR-0018。
 - P3 Credentials 身份源使用 `UserCredential(userId, passwordHash, failedAttempts, lockedUntil, updatedAt)`；密码与业务 User 分表。Auth.js 当前使用 JWT 会话，Account/Session/VerificationToken 为未来 OAuth/数据库会话保留。
+- 未注册但已被分配的员工按需保存为 `User`：六位工号唯一、`name = null`、无 `UserCredential`，并关联 `FILLER` 角色。后续公开注册在同一 User ID 上补全姓名和凭据，不改变任务外键；详见 ADR-0019。
 
 ### 模板
 
@@ -46,6 +47,7 @@ User --< OperationLog
 
 冗余保存 task/slide/assignee 外键用于权限查询效率，但创建时必须验证与 assignment 一致。
 P3 采用 `expectedVersion` 的目标分配集合替换；每个 `(taskId, templateSlideId, assigneeId)` 只对应一个 FillInstance。已有填报痕迹的实例不能被该接口删除，详见 ADR-0005。
+分配目标可提供已有 `assigneeId` 或六位 `employeeNumber`。工号不存在时，在保存分配的事务中按需创建员工账号；编辑界面暂存工号时不写数据库。
 
 ### 绑定与三级值
 

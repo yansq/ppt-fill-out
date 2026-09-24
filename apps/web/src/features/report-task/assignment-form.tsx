@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@report-platform/ui/button";
 
-type Filler = { id: string; employeeNumber: string; username: string; name: string | null; status: string };
+type Filler = { id: string; employeeNumber: string; username: string; name: string | null; status: string; registered?: boolean };
 type Slide = {
   id: string;
   slideIndex: number;
@@ -16,6 +16,7 @@ type Slide = {
 };
 
 function fillerLabel(filler: Filler) {
+  if (filler.registered === false) return `未注册员工（${filler.employeeNumber}）`;
   return `${filler.name || filler.username}（${filler.employeeNumber}）`;
 }
 
@@ -29,11 +30,19 @@ function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const pageNumber = slide.slideIndex + 1;
-  const assigned = fillers.filter((filler) => selected.has(`${slide.id}:${filler.id}`));
+  const pendingPrefix = `${slide.id}:employee:`;
+  const assigned = [
+    ...fillers.filter((filler) => selected.has(`${slide.id}:${filler.id}`)).map((filler) => ({ key: `${slide.id}:${filler.id}`, filler })),
+    ...[...selected].filter((key) => key.startsWith(pendingPrefix)).map((key) => ({
+      key,
+      filler: { id: "", employeeNumber: key.slice(pendingPrefix.length), username: "", name: null, status: "ACTIVE", registered: false }
+    }))
+  ];
   const search = query.trim().toLocaleLowerCase("zh-CN");
   const matching = fillers.filter((filler) =>
     `${filler.name ?? ""} ${filler.username} ${filler.employeeNumber}`.toLocaleLowerCase("zh-CN").includes(search)
   );
+  const unlistedNumber = /^\d{6}$/.test(query.trim()) && !fillers.some((filler) => filler.employeeNumber === query.trim()) ? query.trim() : null;
 
   return <article className="overflow-hidden rounded-xl border bg-card">
     <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
@@ -51,15 +60,15 @@ function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
         {slide.placeholderCount === 0 ? <div className="rounded-lg bg-accent p-4 text-sm text-accent-foreground">这一页没有占位符，不需要填报人。报告生成时会保留原页内容。{slide.assignments.length ? `当前还有 ${slide.assignments.length} 条旧分配，保存时会尝试移除；已经开始填报的分配不能撤销。` : ""}</div> : <>
           <p className="mb-3 text-sm font-medium">负责本页的填报人</p>
           {assigned.length ? <div aria-label={`第 ${pageNumber} 页已选填报人`} className="mb-4 flex flex-wrap gap-2">
-            {assigned.map((filler) => <span className="inline-flex max-w-full items-center gap-2 rounded-full border bg-accent py-1 pl-3 pr-1 text-sm" key={filler.id}>
+            {assigned.map(({ key, filler }) => <span className="inline-flex max-w-full items-center gap-2 rounded-full border bg-accent py-1 pl-3 pr-1 text-sm" key={key}>
               <span className="truncate">{fillerLabel(filler)}{filler.status !== "ACTIVE" ? " · 已停用" : ""}</span>
-              <button aria-label={`移除第 ${pageNumber} 页的 ${fillerLabel(filler)}`} className="rounded-full px-2 py-0.5 text-base hover:bg-background" disabled={pending} onClick={() => onToggle(`${slide.id}:${filler.id}`)} type="button">×</button>
+              <button aria-label={`移除第 ${pageNumber} 页的 ${fillerLabel(filler)}`} className="rounded-full px-2 py-0.5 text-base hover:bg-background" disabled={pending} onClick={() => onToggle(key)} type="button">×</button>
             </span>)}
           </div> : <p className="mb-4 text-sm muted">尚未选择填报人</p>}
-          <Button aria-expanded={pickerOpen} aria-label={`选择第 ${pageNumber} 页填报人`} disabled={pending || fillers.length === 0} onClick={() => setPickerOpen((open) => !open)} type="button" variant="outline">{pickerOpen ? "收起人员列表" : "搜索并选择填报人"}</Button>
+          <Button aria-expanded={pickerOpen} aria-label={`选择第 ${pageNumber} 页填报人`} disabled={pending} onClick={() => setPickerOpen((open) => !open)} type="button" variant="outline">{pickerOpen ? "收起人员列表" : "搜索并选择填报人"}</Button>
           {pickerOpen ? <div className="mt-3 rounded-lg border bg-background p-3">
-            <label className="grid gap-2 text-sm font-medium">搜索姓名或工号
-              <input aria-label={`搜索第 ${pageNumber} 页填报人`} autoComplete="off" className="h-10 w-full rounded-md border bg-card px-3" onChange={(event) => setQuery(event.target.value)} placeholder="输入姓名或工号" type="search" value={query} />
+            <label className="grid gap-2 text-sm font-medium">搜索姓名或输入六位工号
+              <input aria-label={`搜索第 ${pageNumber} 页填报人`} autoComplete="off" className="h-10 w-full rounded-md border bg-card px-3" onChange={(event) => setQuery(event.target.value)} placeholder="输入姓名或六位工号" type="search" value={query} />
             </label>
             <div aria-label={`第 ${pageNumber} 页可选填报人`} className="mt-3 max-h-52 overflow-y-auto" role="group">
               {matching.slice(0, 50).map((filler) => {
@@ -70,7 +79,8 @@ function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
                   <span>{fillerLabel(filler)}{filler.status !== "ACTIVE" ? " · 已停用" : ""}</span>
                 </label>;
               })}
-              {matching.length === 0 ? <p className="px-2 py-3 text-sm muted">没有匹配的填报人</p> : null}
+              {unlistedNumber ? <Button className="mt-2 w-full" disabled={pending} onClick={() => onToggle(`${slide.id}:employee:${unlistedNumber}`)} size="sm" type="button" variant="outline">{selected.has(`${slide.id}:employee:${unlistedNumber}`) ? `取消工号 ${unlistedNumber}` : `按工号添加 ${unlistedNumber}（未注册）`}</Button> : null}
+              {matching.length === 0 && !unlistedNumber ? <p className="px-2 py-3 text-sm muted">没有匹配的填报人；可输入六位工号添加未注册员工</p> : null}
               {matching.length > 50 ? <p className="px-2 py-2 text-xs muted">仅显示前 50 人，请继续输入以缩小范围</p> : null}
             </div>
           </div> : null}
@@ -105,9 +115,10 @@ export function AssignmentForm({ taskId, version, slides, fillers }: {
   async function save() {
     setPending(true);
     setMessage("");
-    const assignments = slides.filter((slide) => slide.placeholderCount > 0).flatMap((slide) => fillers
-      .filter((filler) => selected.has(`${slide.id}:${filler.id}`))
-      .map((filler) => ({ slideId: slide.id, assigneeId: filler.id })));
+    const assignments = slides.filter((slide) => slide.placeholderCount > 0).flatMap((slide) => [
+      ...fillers.filter((filler) => selected.has(`${slide.id}:${filler.id}`)).map((filler) => ({ slideId: slide.id, assigneeId: filler.id })),
+      ...[...selected].filter((key) => key.startsWith(`${slide.id}:employee:`)).map((key) => ({ slideId: slide.id, employeeNumber: key.slice(`${slide.id}:employee:`.length) }))
+    ]);
     try {
       const response = await fetch(`/api/report-tasks/${taskId}/assignments`, {
         method: "PUT",
@@ -131,12 +142,12 @@ export function AssignmentForm({ taskId, version, slides, fillers }: {
   const assignableCount = slides.filter((slide) => slide.placeholderCount > 0).length;
   return <div className="space-y-5">
     <p className="text-sm muted">共 {slides.length} 页，其中 {assignableCount} 页需要填报。可按页搜索并选择一位或多位填报人。</p>
-    {fillers.length === 0 && assignableCount > 0 ? <p className="text-sm">暂无可分配的填报人，请联系管理员添加账号。</p> : null}
+    {fillers.length === 0 && assignableCount > 0 ? <p className="text-sm">暂无已注册填报人，可输入六位工号添加未注册员工。</p> : null}
     {slides.map((slide) => <SlideAssignment fillers={fillers} key={slide.id} onToggle={toggle} pending={pending} selected={selected} slide={slide} />)}
     <div className="flex flex-wrap items-center gap-4">
       <Button disabled={pending} onClick={save} type="button">{pending ? "保存中…" : "保存页面分配"}</Button>
       {message ? <span className="text-sm" role="status">{message}</span> : null}
     </div>
-    <p className="text-xs muted">已有填报痕迹的分配不能撤销；若其他人同时修改了任务，请刷新后重试。</p>
+    <p className="text-xs muted">未注册员工将在保存分配时创建姓名为空的账号；已有填报痕迹的分配不能撤销。若其他人同时修改了任务，请刷新后重试。</p>
   </div>;
 }

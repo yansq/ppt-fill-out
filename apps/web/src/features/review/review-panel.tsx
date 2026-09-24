@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@report-platform/ui/button";
 import { Select } from "@report-platform/ui/select";
+import { employeeDisplayName } from "../auth/employee-label";
 import { instanceStatusText, taskStatusText } from "../../components/status";
 import { PptPreviewImage } from "../fill-in/ppt-preview-image";
 import { AvailableMonthPicker } from "../metric/available-month-picker";
@@ -126,7 +127,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
               {slide.previewUrl ? <Image alt="" className="aspect-video w-full rounded border bg-white object-contain" decoding="async" fetchPriority="low" height={144} loading="lazy" src={slide.previewUrl} unoptimized width={256} /> : <span className="flex aspect-video items-center justify-center rounded border bg-background text-xs muted">暂无预览</span>}
               <span className="mt-2 flex items-center justify-between gap-1 text-xs"><strong>第 {slide.slideIndex + 1} 页</strong><span className="muted">{complete}/{total}</span></span>
               <span className="mt-1 block rounded-md bg-background px-1.5 py-1 text-center text-xs font-medium">{slideStatus(slide, isFilling)}</span>
-              {slide.instances.length ? <span className="mt-1 block text-xs muted">{slide.instances.map((instance) => `${instance.assignee.name || instance.assignee.username}（${instance.assignee.employeeNumber}）`).join("、")}</span> : null}
+              {slide.instances.length ? <span className="mt-1 block text-xs muted">{slide.instances.map((instance) => `${employeeDisplayName(instance.assignee)}（${instance.assignee.employeeNumber}）`).join("、")}</span> : null}
             </button>;
           })}
         </div>
@@ -152,16 +153,16 @@ export function ReviewPanel({ initial }: { initial: Review }) {
           <Button disabled={busy || metricPeriodAvailable !== true} onClick={loadMetrics} size="sm" type="button" variant="outline">查询指标</Button>
         </div> : null}
         <div className="mt-4 space-y-2">{selectedSlide.instances.map((instance) => <div className="rounded-md border p-3 text-sm" key={instance.id}>
-          <p>{instance.assignee.name || instance.assignee.username}（{instance.assignee.employeeNumber}） · {instanceStatusText[instance.status]}</p>
+          <p>{employeeDisplayName(instance.assignee)}（{instance.assignee.employeeNumber}） · {instanceStatusText[instance.status]}</p>
           {instance.status === "SUBMITTED" && canReview ? <div className="mt-2 flex flex-wrap gap-2">
-            <input aria-label={`退回 ${instance.assignee.username} 的原因`} className="h-9 min-w-40 flex-1 rounded-md border bg-background px-2" onChange={(event) => setReasons({ ...reasons, [instance.id]: event.target.value })} placeholder="退回原因" value={reasons[instance.id] ?? ""} />
+            <input aria-label={`退回 ${employeeDisplayName(instance.assignee)} 的原因`} className="h-9 min-w-40 flex-1 rounded-md border bg-background px-2" onChange={(event) => setReasons({ ...reasons, [instance.id]: event.target.value })} placeholder="退回原因" value={reasons[instance.id] ?? ""} />
             <Button disabled={busy || !reasons[instance.id]?.trim()} onClick={() => mutate(`/api/report-tasks/${review.task.id}/fill-instances/${instance.id}/return`, "POST", { reason: reasons[instance.id] })} size="sm" type="button" variant="outline">退回</Button>
           </div> : null}
         </div>)}</div>
         <div className="mt-4 space-y-4">{selectedSlide.placeholders.map((placeholder) => <div className="rounded-md border p-3 text-sm" key={placeholder.id}>
           <p className="font-medium"><code>{`{{${placeholder.key}}}`}</code> #{placeholder.occurrenceIndex + 1} · {statusNames[placeholder.status]}</p>
           <div className="mt-2 space-y-2">{placeholder.submissions.map((submission) => <div className="rounded-md bg-background p-2" key={submission.id}>
-            <p>{submission.assignee.name || submission.assignee.username} · 第 {submission.submissionRevision} 版：{submission.valueText}</p>
+            <p>{employeeDisplayName(submission.assignee)} · 第 {submission.submissionRevision} 版：{submission.valueText}</p>
             {canReview ? <Button className="mt-2" disabled={busy} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "SELECTED_SUBMISSION", selectedSubmittedValueId: submission.id })} size="sm" type="button" variant="outline">采用此值</Button> : null}
           </div>)}</div>
           {canSetValue ? <div className="mt-3 space-y-3 rounded-md border bg-background p-3">

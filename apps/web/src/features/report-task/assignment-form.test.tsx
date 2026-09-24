@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AssignmentForm } from "./assignment-form";
@@ -16,7 +16,7 @@ const slides = [
   { id: "content", slideIndex: 1, previewUrl: "/api/templates/t/slides/1/preview", placeholderCount: 2, assignments: [] }
 ];
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("page assignment", () => {
   it("shows slide previews, searches people and never assigns an empty slide", async () => {
@@ -40,6 +40,25 @@ describe("page assignment", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       expectedVersion: 3,
       assignments: [{ slideId: "content", assigneeId: "bob" }]
+    });
+  });
+
+  it("keeps an unregistered employee local until the collector saves assignments", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AssignmentForm fillers={fillers} slides={slides} taskId="task" version={3} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "选择第 2 页填报人" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索第 2 页填报人" }), { target: { value: "001234" } });
+    fireEvent.click(screen.getByRole("button", { name: "按工号添加 001234（未注册）" }));
+    expect(screen.getByText("未注册员工（001234）")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "保存页面分配" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      expectedVersion: 3,
+      assignments: [{ slideId: "content", employeeNumber: "001234" }]
     });
   });
 });

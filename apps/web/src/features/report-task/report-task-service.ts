@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma, prisma } from "@report-platform/database";
 
 import { currentActor, requireCollector, requireFiller } from "@/features/auth/authorization";
+import { pendingUsername } from "../auth/employee-account";
 
 import { createTaskSchema, replaceAssignmentsSchema, startInstanceSchema, taskProgress } from "./task-policy";
 
@@ -163,14 +164,15 @@ export async function getCollectorReportTask(taskId: string) {
 
 export async function listAssignableFillers(existingAssigneeIds: string[] = []) {
   await requireCollector();
-  return prisma.user.findMany({
+  const users = await prisma.user.findMany({
     where: { OR: [
       { status: "ACTIVE", roles: { some: { role: { code: { in: [...assignableRoleCodes] } } } } },
       { id: { in: existingAssigneeIds } }
     ] },
     orderBy: [{ name: "asc" }, { username: "asc" }],
-    select: { id: true, employeeNumber: true, username: true, name: true, status: true }
+    select: { id: true, employeeNumber: true, username: true, name: true, status: true, credential: { select: { userId: true } } }
   });
+  return users.map(({ credential, ...user }) => ({ ...user, registered: Boolean(credential) }));
 }
 
 export async function listReadyOwnedTemplates() {
@@ -216,18 +218,57 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
       if (parsed.assignments.some((assignment) => !slideIds.has(assignment.slideId))) {
         throw new ReportTaskError("VALIDATION_ERROR", "分配页面不属于当前模板", 400);
       }
+      const emptySlideIds = new Set(task.template.slides.filter((slide) => slide._count.placeholders === 0).map((slide) => slide.id));
+      if (parsed.assignments.some((assignment) => emptySlideIds.has(assignment.slideId))) {
+        throw new ReportTaskError("VALIDATION_ERROR", "没有占位符的页面无需分配填报人", 400);
+      }
+      const employeeNumbers = [...new Set(parsed.assignments.flatMap((assignment) =>
+        "employeeNumber" in assignment ? [assignment.employeeNumber] : []
+      ))];
+      const existingUsers = employeeNumbers.length ? await tx.user.findMany({
+        where: { employeeNumber: { in: employeeNumbers } },
+        select: { id: true, employeeNumber: true, status: true, roles: { select: { role: { select: { code: true } } } } }
+      }) : [];
+      const userByNumber = new Map(existingUsers.map((user) => [user.employeeNumber, user.id]));
+      for (const user of existingUsers) {
+        if (user.status !== "ACTIVE") throw new ReportTaskError("VALIDATION_ERROR", "该工号对应账号已停用", 400);
+        if (!user.roles.some(({ role }) => assignableRoleCodes.some((code) => code === role.code))) {
+          throw new ReportTaskError("VALIDATION_ERROR", "该工号对应账号没有填报权限", 400);
+        }
+      }
+      if (employeeNumbers.some((number) => !userByNumber.has(number))) {
+        const fillerRole = await tx.role.findUnique({ where: { code: "FILLER" }, select: { id: true } });
+        if (!fillerRole) throw new ReportTaskError("ROLE_UNAVAILABLE", "填报人角色尚未配置", 503);
+        for (const number of employeeNumbers) {
+          if (userByNumber.has(number)) continue;
+          const user = await tx.user.create({
+            data: {
+              employeeNumber: number,
+              username: pendingUsername(number),
+              name: null,
+              status: "ACTIVE",
+              roles: { create: { roleId: fillerRole.id } }
+            },
+            select: { id: true }
+          });
+          userByNumber.set(number, user.id);
+        }
+      }
+      const resolvedAssignments = parsed.assignments.map((assignment) => ({
+        slideId: assignment.slideId,
+        assigneeId: "assigneeId" in assignment ? assignment.assigneeId : userByNumber.get(assignment.employeeNumber)!
+      }));
       const existing = new Map(task.assignments.map((assignment) => [
         assignmentKey(assignment.templateSlideId, assignment.assigneeId), assignment
       ]));
-      const desired = new Map(parsed.assignments.map((assignment) => [
+      const desired = new Map(resolvedAssignments.map((assignment) => [
         assignmentKey(assignment.slideId, assignment.assigneeId), assignment
       ]));
+      if (desired.size !== resolvedAssignments.length) {
+        throw new ReportTaskError("VALIDATION_ERROR", "同一页面不能重复分配给同一填报人", 400);
+      }
       const removals = [...existing].filter(([key]) => !desired.has(key));
       const additions = [...desired].filter(([key]) => !existing.has(key));
-      const emptySlideIds = new Set(task.template.slides.filter((slide) => slide._count.placeholders === 0).map((slide) => slide.id));
-      if (additions.some(([, assignment]) => emptySlideIds.has(assignment.slideId))) {
-        throw new ReportTaskError("VALIDATION_ERROR", "没有占位符的页面无需分配填报人", 400);
-      }
       const assigneeIds = [...new Set(additions.map(([, assignment]) => assignment.assigneeId))];
       const activeFillers = await tx.user.findMany({
         where: {

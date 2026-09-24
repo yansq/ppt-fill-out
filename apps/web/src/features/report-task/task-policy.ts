@@ -10,14 +10,16 @@ export const createTaskSchema = z.object({
 
 export const replaceAssignmentsSchema = z.object({
   expectedVersion: z.number().int().min(0),
-  assignments: z.array(z.object({
-    slideId: idSchema,
-    assigneeId: idSchema
-  })).max(1000)
+  assignments: z.array(z.union([
+    z.object({ slideId: idSchema, assigneeId: idSchema }).strict(),
+    z.object({ slideId: idSchema, employeeNumber: z.string().regex(/^\d{6}$/) }).strict()
+  ])).max(1000)
 }).superRefine(({ assignments }, context) => {
   const seen = new Set<string>();
   for (const assignment of assignments) {
-    const key = `${assignment.slideId}:${assignment.assigneeId}`;
+    const key = "assigneeId" in assignment
+      ? `${assignment.slideId}:id:${assignment.assigneeId}`
+      : `${assignment.slideId}:number:${assignment.employeeNumber}`;
     if (seen.has(key)) {
       context.addIssue({ code: "custom", message: "同一页面不能重复分配给同一填报人" });
       return;

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
 import { LoginForm } from "@/features/auth/login-form";
@@ -24,6 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <p className="muted mt-2">使用分配给你的账号继续工作。</p>
       {passwordChanged === "1" ? <p className="mt-4 text-sm text-primary" role="status">密码已修改，请使用新密码重新登录。</p> : null}
       <LoginForm callbackUrl={destination} />
+      <p className="mt-5 text-center text-sm">还没有账号？<Link className="text-primary underline" href="/register">注册填报人账号</Link></p>
     </section>
   </main>;
 }

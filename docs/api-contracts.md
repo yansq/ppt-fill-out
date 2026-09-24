@@ -23,6 +23,8 @@
 
 P3 登录入口为 Auth.js `GET/POST /api/auth/[...nextauth]`，Credentials 接收 6 位 `employeeNumber` 和 `password`。业务 API 从服务端会话取得用户 ID，不接受调用方提交的 `actorId`。无会话返回 401，无角色返回 403；无权访问的模板及其缩略图按 404 隐藏资源存在性。
 
+公开注册入口 `POST /api/register` 接收 `{ employeeNumber, name, password, confirmPassword }`；工号须为六位数字，姓名必填，密码至少六位，两次密码一致。成功返回 201 和 `{ user: { employeeNumber } }`，仅开通 `FILLER` 角色；若工号已由分配建立无凭据账号，则在原 User ID 上补全姓名和凭据。已注册、停用或收集人账号返回 409。注册成功后客户端以同一组工号和密码建立 Auth.js 会话并进入工作台；若自动登录失败，提示账号已创建并提供登录入口。详见 ADR-0019。
+
 已登录用户可调用 `PUT /api/account/password` 修改自己的密码，请求为 `{ currentPassword, newPassword, confirmPassword }`。新密码要求 6–1024 位、两次输入一致且不同于当前密码；服务端先校验当前密码，再写入新的随机盐 scrypt 哈希，不接受用户 ID 参数。错误的当前密码计入账号连续失败次数，达到 5 次时锁定 15 分钟；成功后清除失败次数。修改事件写操作日志，但不记录密码或哈希。前端收到成功响应后调用 Auth.js 退出登录，并跳转至登录页提示使用新密码。
 
 | 能力 | 建议接口 | 服务端授权 |
@@ -65,7 +67,7 @@ P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`�
 
 草稿预览改为 `GET /api/fill-instances/{id}/draft-preview?version={fillInstanceVersion}`，按实例权限读取已保存绑定值；版本不一致返回 409，他人实例返回 404。响应为 `image/png` 和 `private, no-store`，保存绑定后前端用新版本 URL 重新请求。
 
-P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。同页多名具备填报权限的用户分别对应独立 FillInstance；活跃 Collector 也可被分配，详见 ADR-0018。无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
+P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId } | { slideId, employeeNumber }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。六位工号尚无账号时，确认保存会在同一事务中按需创建姓名为空、无凭据的 `FILLER` 用户。已注册用户与活跃 Collector 也可被分配，详见 ADR-0018、ADR-0019。同页多名填报人分别对应独立 FillInstance。无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
 
 `POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前具备填报权限用户被分配的实例；他人的实例 ID 返回 404。
 
