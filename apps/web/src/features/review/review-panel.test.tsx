@@ -62,7 +62,8 @@ describe("review page layout", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "查询指标" }).hasAttribute("disabled")).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "查询指标" }));
     await waitFor(() => expect(screen.getByRole("combobox", { name: "选择指标 first" })).toBeTruthy());
-    fireEvent.change(screen.getByRole("combobox", { name: "选择指标 first" }), { target: { value: "metric-1" } });
+    fireEvent.click(screen.getByRole("combobox", { name: "选择指标 first" }));
+    fireEvent.click(screen.getByRole("option", { name: /收入（M1）/ }));
     fireEvent.click(screen.getByRole("button", { name: "保存指标值" }));
     await waitFor(() => expect(screen.getByText(/最终值：42/)).toBeTruthy());
     expect(screen.getByText(/收入 · 2026-09/)).toBeTruthy();

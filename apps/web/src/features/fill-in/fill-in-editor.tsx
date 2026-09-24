@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@report-platform/ui/button";
+import { Select } from "@report-platform/ui/select";
 import { AvailableMonthPicker } from "../metric/available-month-picker";
 
 import {
@@ -483,21 +484,10 @@ function PlaceholderEditor({
         当前草稿：{current || "未填写"}
         {binding?.metricPeriod ? ` · 指标月份 ${binding.metricPeriod}` : ""}
       </p>
-      <label className="mt-3 grid gap-2">
-        来源
-        <select
-          className="h-10 rounded-md border bg-background px-3"
-          disabled={busy}
-          onChange={(event) => {
-            setSourceType(event.target.value);
-            onDirty();
-          }}
-          value={sourceType}
-        >
-          <option value="MANUAL_TEXT">人工填写</option>
-          <option value="DATABASE_METRIC">数据库指标</option>
-        </select>
-      </label>
+      <div className="mt-3 grid gap-2">
+        <span>来源</span>
+        <Select aria-label={`来源 ${placeholder.key}`} disabled={busy} onValueChange={(next) => { setSourceType(next); onDirty(); }} options={[{ value: "MANUAL_TEXT", label: "人工填写" }, { value: "DATABASE_METRIC", label: "数据库指标" }]} value={sourceType} />
+      </div>
       {sourceType === "MANUAL_TEXT" ? (
         <label className="mt-3 grid gap-2">
           内容
@@ -513,26 +503,10 @@ function PlaceholderEditor({
           />
         </label>
       ) : (
-        <label className="mt-3 grid gap-2">
-          {viewPeriod} 指标
-          <select
-            className="h-10 rounded-md border bg-background px-3"
-            disabled={busy}
-            onChange={(event) => {
-              setMetricDefinitionId(event.target.value);
-              onDirty();
-            }}
-            value={metricDefinitionId}
-          >
-            <option value="">选择已加载指标</option>
-            {metrics.map((metric) => (
-              <option key={metric.definitionId} value={metric.definitionId}>
-                {metric.name} · {metric.valueText}
-                {metric.unit ? ` ${metric.unit}` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="mt-3 grid gap-2">
+          <span>{viewPeriod} 指标</span>
+          <Select aria-label={`${viewPeriod} 指标 ${placeholder.key}`} disabled={busy} onValueChange={(next) => { setMetricDefinitionId(next); onDirty(); }} options={metrics.map((metric) => ({ value: metric.definitionId, label: `${metric.name} · ${metric.valueText}${metric.unit ? ` ${metric.unit}` : ""}` }))} placeholder="选择已加载指标" value={metricDefinitionId} />
+        </div>
       )}
       <Button
         className="mt-3"

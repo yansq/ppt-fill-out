@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./button": "./src/components/button.tsx",
+    "./select": "./src/components/select.tsx",
     "./utils": "./src/lib/utils.ts"
   },
   "scripts": {
@@ -25,4 +26,3 @@
     "react": ">=19.0.0"
   }
 }
-

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@report-platform/ui/button";
+import { Select } from "@report-platform/ui/select";
 import { instanceStatusText, taskStatusText } from "../../components/status";
 import { PptPreviewImage } from "../fill-in/ppt-preview-image";
 import { AvailableMonthPicker } from "../metric/available-month-picker";
@@ -167,7 +168,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
             <p className="font-medium">收集人填写最终值</p>
             <div className="grid gap-2"><input aria-label={`手工最终值 ${placeholder.key}`} className="h-9 min-w-0 rounded-md border bg-background px-2" onChange={(event) => setManual({ ...manual, [placeholder.id]: event.target.value })} placeholder="人工输入值" value={manual[placeholder.id] ?? ""} /><Button disabled={busy || !manual[placeholder.id]?.trim()} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "MANUAL", valueText: manual[placeholder.id] })} size="sm" type="button">保存人工值</Button></div>
             <div className="grid gap-2 border-t pt-3">
-              {loadedPeriod === metricPeriod ? <><select aria-label={`选择指标 ${placeholder.key}`} className="h-9 min-w-0 rounded-md border bg-background px-2" onChange={(event) => setMetricChoices({ ...metricChoices, [placeholder.id]: event.target.value })} value={metricChoices[placeholder.id] ?? ""}><option value="">请选择指标</option>{metrics.map((metric) => <option key={metric.definitionId} value={metric.definitionId}>{metric.name}（{metric.code}）· {metric.valueText}{metric.unit ?? ""} · {metric.dataSource.name}</option>)}</select><Button disabled={busy || !metricChoices[placeholder.id]} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "DATABASE_METRIC", metricDefinitionId: metricChoices[placeholder.id], metricPeriod })} size="sm" type="button" variant="outline">保存指标值</Button></> : <p className="text-xs muted">请先在上方选择有指标的月份并查询。</p>}
+              {loadedPeriod === metricPeriod ? <><Select aria-label={`选择指标 ${placeholder.key}`} onValueChange={(next) => setMetricChoices({ ...metricChoices, [placeholder.id]: next })} options={metrics.map((metric) => ({ value: metric.definitionId, label: `${metric.name}（${metric.code}）· ${metric.valueText}${metric.unit ?? ""} · ${metric.dataSource.name}` }))} placeholder="请选择指标" value={metricChoices[placeholder.id] ?? ""} /><Button disabled={busy || !metricChoices[placeholder.id]} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "DATABASE_METRIC", metricDefinitionId: metricChoices[placeholder.id], metricPeriod })} size="sm" type="button" variant="outline">保存指标值</Button></> : <p className="text-xs muted">请先在上方选择有指标的月份并查询。</p>}
             </div>
           </div> : null}
           {placeholder.finalValue ? <p className="mt-3 rounded-md bg-accent p-2">最终值：{placeholder.finalValue.valueText} · {placeholder.finalValue.resolutionType === "MANUAL" ? "人工输入" : placeholder.finalValue.resolutionType === "DATABASE_METRIC" ? metricSourceLabel(placeholder.finalValue) : "采用提交值"}</p> : null}
