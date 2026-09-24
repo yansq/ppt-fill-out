@@ -15,14 +15,23 @@ export function TemplateUploadForm() {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<UploadState>({ status: "idle" });
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const fileInput = event.currentTarget.elements.namedItem("file") as HTMLInputElement | null;
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      setState({ status: "error", message: "请选择 PPTX 文件" });
+      return;
+    }
+    const body = new FormData(event.currentTarget);
+    body.set("file", file);
     setState({ status: "uploading" });
     try {
       const response = await fetch("/api/templates", {
         method: "POST",
-        body: new FormData(event.currentTarget)
+        body
       });
       const payload = (await response.json()) as {
         template?: { name: string; slides: unknown[] };
@@ -39,6 +48,7 @@ export function TemplateUploadForm() {
         message: `${payload.template.name} 已解析，共 ${payload.template.slides.length} 页`
       });
       formRef.current?.reset();
+      setSelectedFileName("");
       router.refresh();
     } catch {
       setState({ status: "error", message: "上传请求失败，请检查服务状态后重试" });
@@ -65,14 +75,19 @@ export function TemplateUploadForm() {
         <label className="text-sm font-medium" htmlFor="template-file">
           PPTX 文件
         </label>
-        <input
-          accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          className="rounded-md border bg-background px-3 py-2 text-sm file:mr-4 file:border-0 file:bg-transparent file:font-medium"
-          id="template-file"
-          name="file"
-          required
-          type="file"
-        />
+        <div className="flex min-w-0 items-center gap-3 rounded-md border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
+          <input
+            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            className="sr-only"
+            disabled={state.status === "uploading"}
+            id="template-file"
+            name="file"
+            onChange={(event) => setSelectedFileName(event.currentTarget.files?.[0]?.name ?? "")}
+            type="file"
+          />
+          <Button asChild size="sm" variant="outline"><label className="shrink-0 cursor-pointer" htmlFor="template-file">选择文件</label></Button>
+          <span aria-live="polite" className="min-w-0 flex-1 truncate text-sm muted" title={selectedFileName || undefined}>{selectedFileName || "未选择文件"}</span>
+        </div>
       </div>
       <div className="flex items-center gap-4">
         <Button disabled={state.status === "uploading"} type="submit">
