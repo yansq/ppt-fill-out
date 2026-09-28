@@ -8,6 +8,10 @@ services:
       LIBREOFFICE_EXECUTABLE: soffice
       PPT_SERVICE_API_KEY: ${PPT_SERVICE_API_KEY:?set PPT_SERVICE_API_KEY}
       STORAGE_ROOT: /data
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
     volumes:
       - report-data:/data
     expose:

@@ -14,6 +14,7 @@ import {
 } from "./ppt-service-client";
 import { validatePptxPackage } from "./pptx-validation";
 import { readStoredFile, removeStoredFile, saveTemplateFile } from "./storage";
+import { TemplateUploadError } from "./template-error";
 
 const templateNameSchema = z.string().trim().min(1).max(191);
 const acceptedMimeTypes = new Set([
@@ -22,16 +23,7 @@ const acceptedMimeTypes = new Set([
   "application/zip"
 ]);
 
-export class TemplateUploadError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    public readonly status: number
-  ) {
-    super(message);
-    this.name = "TemplateUploadError";
-  }
-}
+export { TemplateUploadError } from "./template-error";
 
 export function maxUploadBytes() {
   const parsed = Number.parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "50", 10);

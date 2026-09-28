@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const decisionSchema = z.discriminatedUnion("resolutionType", [
   z.object({ resolutionType: z.literal("SELECTED_SUBMISSION"), selectedSubmittedValueId: z.string().min(1), expectedVersion: z.number().int().min(0) }),
-  z.object({ resolutionType: z.literal("MANUAL"), valueText: z.string().trim().min(1).max(100_000), expectedVersion: z.number().int().min(0) }),
+  z.object({ resolutionType: z.literal("MANUAL"), valueText: z.string().trim().min(1).max(100_000), aiGenerationId: z.string().min(1).optional(), expectedVersion: z.number().int().min(0) }),
   z.object({ resolutionType: z.literal("DATABASE_METRIC"), metricDefinitionId: z.string().min(1), metricPeriod: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), expectedVersion: z.number().int().min(0) })
 ]);
 

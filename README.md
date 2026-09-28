@@ -128,7 +128,7 @@ docker compose --env-file .env -f docker/docker-compose.yml up --build
 
 macOS/Windows 容器连接宿主机 MySQL 时使用 `host.docker.internal`。Compose 已为 Linux 配置 `host-gateway` 映射；独立数据库服务器则直接填写其可路由地址。两个服务共享命名 Volume `report-data:/data`，Web 只暴露 3000 端口，PPT Service 仅在内部网络可见。
 
-企业内网运行时，默认只在宿主机回环地址发布 Web 端口。若通过内网反向代理访问，代理不在同一主机时，将 `WEB_BIND_ADDRESS` 改为受控内网 IP；`WEB_PORT` 可调整宿主机端口，`AUTH_URL` 必须与浏览器实际访问的 HTTP 或 HTTPS 地址一致。无 HTTPS 时，登录密码和会话 Cookie 会在网络中明文传输，仅可在可信内网使用，并通过网络隔离、访问控制和防火墙限制入口，不得暴露公网；条件允许后应启用 TLS。代理应清理并重写 Host/Forwarded 头。构建机可联网下载依赖，但部署节点应从内部镜像仓库或预加载镜像启动；核心流程不访问公网。AI 配置仅为 P7 预留，不能把公网模型 API 当作内网部署的前置依赖。
+企业内网运行时，默认只在宿主机回环地址发布 Web 端口。若通过内网反向代理访问，代理不在同一主机时，将 `WEB_BIND_ADDRESS` 改为受控内网 IP；`WEB_PORT` 可调整宿主机端口，`AUTH_URL` 必须与浏览器实际访问的 HTTP 或 HTTPS 地址一致。无 HTTPS 时，登录密码和会话 Cookie 会在网络中明文传输，仅可在可信内网使用，并通过网络隔离、访问控制和防火墙限制入口，不得暴露公网；条件允许后应启用 TLS。代理应清理并重写 Host/Forwarded 头。构建机可联网下载依赖，但部署节点应从内部镜像仓库或预加载镜像启动；核心流程不访问公网。AI 为可选的 P7 能力；将模型地址和密钥配置为企业批准的内网服务，核心流程不依赖模型在线。
 
 ## 校验命令
 
@@ -152,3 +152,11 @@ P3 真实数据库/HTTP 冒烟测试需要一个专用 `@local.test` Collector�
 2. 完成 TypeScript 类型检查、Next.js 构建和 Java 编译。
 3. 更新本 README 中可运行说明（进入实现阶段后）。
 4. 更新 [docs/progress.md](docs/progress.md)，记录证据、遗留问题和下一阶段入口条件。
+
+### AI 模板与文本候选（P7）
+
+在服务端配置 `AI_PROVIDER=openai-compatible`、`AI_BASE_URL`、`AI_API_KEY` 和 `AI_MODEL` 后，Collector 可在“模板管理”上传已填数据的样例 PPTX，修改提示词生成占位符候选，检查原文与 key，下载待确认 PPTX，再确认保存正式模板。系统保留样例的文本框和表格格式；图片中的文字不会自动识别。AI 不可用时，既有模板上传、填报和导出不受影响。
+
+Collector 还可在任务填报/审核页对单个占位符生成文本候选。候选先进入可编辑的人工值字段，保存后才成为 FinalValue。使用模型前请将 `AI_BASE_URL` 指向经企业批准的内网 OpenAI-compatible endpoint；真实模型效果须以企业样例 PPT 验收。
+
+本地 `pnpm dev`：把四项 `AI_*` 写入不提交的 `apps/web/.env.local`，重启 Web。若使用仓库根目录 `.env`，须按“本地开发”步骤先 `source .env`，Next.js 不会自动加载根目录文件。Docker Compose：把四项写入传给 `--env-file` 的 `.env`；Compose 会把它们传入 `report-web` 容器，更新后重建或重启该容器。内网部署使用 `docker/intranet/.env.example` 作为填写模板。密钥只保存在服务端环境文件，不在模板管理页面填写。

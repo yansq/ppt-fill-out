@@ -181,3 +181,11 @@ interface MetricDataSource {
 ```
 
 Adapter 输出统一值类型和来源版本，不向领域层泄漏供应商 SQL 类型或连接对象。
+
+### 样例 PPT 生成模板（2026-09-28）
+
+`POST /api/templates/from-sample` 仅 Collector 可用，`multipart/form-data`。`action=generate` 提交 `file`（PPTX）和 `prompt`（1–4000 字），返回 `{ draft: { sha256, segments, replacements, model } }`。每个 segment 含 `slideIndex`、`shapeId`、`tableRow?`、`tableColumn?`、`paragraphIndex`、`text`；replacement 含 `segment`、`originalText`、`key`。用户可编辑或删除候选。`action=confirm` 提交原 `file`、`name`、`sha256` 及 JSON `replacements`，成功返回 `{ template }`（201），并进入标准模板解析/预览流程。确认时重新检查 SHA-256、原文存在且唯一、范围不重叠和 key 语法；未配置模型返回 `AI_NOT_CONFIGURED`（503），模型故障返回 `AI_GENERATION_FAILED`（502）。内部 PPT Service 新增 `POST /ppt/sample-text` 和 `POST /ppt/template-from-sample`，继续受 `X-Internal-Api-Key` 保护。
+
+P7 任务文本 AI 候选：`POST /api/report-tasks/{id}/ai-generations` 仅任务 Collector 在 `FILLING/REVIEWING` 可用，请求 `{ placeholderId, prompt }`，返回 `{ candidate: { id, outputText } }`（201）。仅该任务模板的占位符可用；服务保存输入快照、模型输出和生成审计。`PUT /api/report-tasks/{id}/final-values/{placeholderId}` 的 `MANUAL` 分支可附 `aiGenerationId`；最终值仍由用户修改并显式保存，事务中记录 `AiGeneration.acceptedText` 与采纳日志。未配置或模型故障只影响 AI 操作。
+
+样例模板流程还支持 `action=preview`：提交 `file`、`sha256`、`replacements`，返回带 `private, no-store` 的待确认 PPTX 下载，不创建正式模板；修改候选后可反复下载，最终再用 `action=confirm` 保存。

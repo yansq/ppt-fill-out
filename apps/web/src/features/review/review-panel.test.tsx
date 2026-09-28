@@ -70,6 +70,26 @@ describe("review page layout", () => {
     expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toMatchObject({ resolutionType: "DATABASE_METRIC", metricDefinitionId: "metric-1", metricPeriod: "2026-09", expectedVersion: 4 });
   });
 
+  it("lets the collector edit and save an AI candidate as a manual final value", async () => {
+    const saved = { ...initial, task: { ...initial.task, version: 4 }, slides: initial.slides.map((slide, index) => index === 0 ? {
+      ...slide, placeholders: slide.placeholders.map((placeholder) => ({ ...placeholder, finalValue: { valueText: "修改后的候选", resolutionType: "MANUAL" } }))
+    } : slide) };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ periods: ["2026-09"] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ candidate: { id: "ai-1", outputText: "原始候选" } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => saved });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReviewPanel initial={initial} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "AI 提示词 first" }), { target: { value: "突出同比增长" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成 AI 候选" }));
+    await waitFor(() => expect((screen.getByRole("textbox", { name: "手工最终值 first" }) as HTMLInputElement).value).toBe("原始候选"));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ placeholderId: "placeholder-1", prompt: "突出同比增长" });
+    fireEvent.change(screen.getByRole("textbox", { name: "手工最终值 first" }), { target: { value: "修改后的候选" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存人工值" }));
+    await waitFor(() => expect(screen.getByText(/最终值：修改后的候选/)).toBeTruthy());
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({ resolutionType: "MANUAL", valueText: "修改后的候选", aiGenerationId: "ai-1" });
+  });
+
   it("keeps the same three-column workspace while the task is filling", () => {
     const filling = {
       ...initial,

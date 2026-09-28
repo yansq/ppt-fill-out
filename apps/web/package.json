@@ -16,9 +16,11 @@
     "test:p6:smoke": "node scripts/p6-integration-smoke.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.57",
     "@report-platform/database": "workspace:*",
     "@report-platform/shared": "workspace:*",
     "@report-platform/ui": "workspace:*",
+    "ai": "^7.0.118",
     "mysql2": "3.15.0",
     "next": "16.3.5",
     "next-auth": "5.0.0-beta.32",

@@ -106,6 +106,12 @@ export async function decideFinalValue(taskId: string, placeholderId: string, in
       });
       if (latest?.id !== selected.id) throw new ReportTaskError("VALIDATION_ERROR", "不能采用旧版提交值", 400);
     }
+    const aiGeneration = decision.resolutionType === "MANUAL" && decision.aiGenerationId
+      ? await tx.aiGeneration.findFirst({ where: { id: decision.aiGenerationId, taskId, placeholderId, createdById: actor.id } })
+      : null;
+    if (decision.resolutionType === "MANUAL" && decision.aiGenerationId && !aiGeneration) {
+      throw new ReportTaskError("VALIDATION_ERROR", "AI 候选不属于当前填报项", 400);
+    }
     const changed = await tx.reportTask.updateMany({
       where: { id: taskId, collectorId: actor.id, status: task.status, version: decision.expectedVersion },
       data: { version: { increment: 1 } }
@@ -126,6 +132,13 @@ export async function decideFinalValue(taskId: string, placeholderId: string, in
         decidedById: actor.id, decidedAt: new Date(), version: { increment: 1 }
       }
     });
+    if (aiGeneration && decision.resolutionType === "MANUAL") {
+      await tx.aiGeneration.update({ where: { id: aiGeneration.id }, data: { acceptedText: decision.valueText } });
+      await tx.operationLog.create({ data: {
+        actorId: actor.id, action: "AI_CANDIDATE_ACCEPTED", resourceType: "AiGeneration", resourceId: aiGeneration.id,
+        taskId, correlationId: randomUUID(), metadataJson: { placeholderId, finalValueId: next.id }
+      } });
+    }
     await tx.operationLog.create({ data: {
       actorId: actor.id, action: "FINAL_VALUE_DECIDED", resourceType: "FinalValue", resourceId: next.id,
       taskId, correlationId: randomUUID(),

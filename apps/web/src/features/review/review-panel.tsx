@@ -42,6 +42,8 @@ export function ReviewPanel({ initial }: { initial: Review }) {
   const review = updatedReview && updatedReview.task.version >= initial.task.version ? updatedReview : initial;
   const [selectedSlideId, setSelectedSlideId] = useState(initial.slides[0]?.id ?? "");
   const [manual, setManual] = useState<Record<string, string>>({});
+  const [aiPrompts, setAiPrompts] = useState<Record<string, string>>({});
+  const [aiGenerationIds, setAiGenerationIds] = useState<Record<string, string>>({});
   const [metricPeriod, setMetricPeriod] = useState(initial.task.reportPeriod);
   const [metrics, setMetrics] = useState<MetricOption[]>([]);
   const [loadedPeriod, setLoadedPeriod] = useState("");
@@ -67,6 +69,27 @@ export function ReviewPanel({ initial }: { initial: Review }) {
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "审核操作失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generateAiCandidate(placeholderId: string) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/report-tasks/${review.task.id}/ai-generations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ placeholderId, prompt: aiPrompts[placeholderId]?.trim() || "根据报告月份、占位符上下文和已有提交值，生成一段适合放入报告的简洁文本。" })
+      });
+      const result = await response.json() as { candidate?: { id: string; outputText: string }; error?: { message: string } };
+      if (!response.ok || !result.candidate) throw new Error(result.error?.message ?? "AI 候选生成失败");
+      setManual((previous) => ({ ...previous, [placeholderId]: result.candidate!.outputText }));
+      setAiGenerationIds((previous) => ({ ...previous, [placeholderId]: result.candidate!.id }));
+      setMessage("AI 候选已填入人工值，请检查和修改后保存。 ");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "AI 候选生成失败");
     } finally {
       setBusy(false);
     }
@@ -167,7 +190,13 @@ export function ReviewPanel({ initial }: { initial: Review }) {
           </div>)}</div>
           {canSetValue ? <div className="mt-3 space-y-3 rounded-md border bg-background p-3">
             <p className="font-medium">收集人填写最终值</p>
-            <div className="grid gap-2"><input aria-label={`手工最终值 ${placeholder.key}`} className="h-9 min-w-0 rounded-md border bg-background px-2" onChange={(event) => setManual({ ...manual, [placeholder.id]: event.target.value })} placeholder="人工输入值" value={manual[placeholder.id] ?? ""} /><Button disabled={busy || !manual[placeholder.id]?.trim()} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "MANUAL", valueText: manual[placeholder.id] })} size="sm" type="button">保存人工值</Button></div>
+            <div className="grid gap-2"><textarea aria-label={`手工最终值 ${placeholder.key}`} className="min-h-24 min-w-0 rounded-md border bg-background p-2" onChange={(event) => setManual({ ...manual, [placeholder.id]: event.target.value })} placeholder="人工输入值" value={manual[placeholder.id] ?? ""} /><Button disabled={busy || !manual[placeholder.id]?.trim()} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "MANUAL", valueText: manual[placeholder.id], aiGenerationId: aiGenerationIds[placeholder.id] })} size="sm" type="button">保存人工值</Button></div>
+            <div className="grid gap-2 border-t pt-3">
+              <label className="grid gap-1 text-sm">AI 生成提示词
+                <textarea aria-label={`AI 提示词 ${placeholder.key}`} className="min-h-20 rounded-md border bg-background p-2" maxLength={4000} onChange={(event) => setAiPrompts((previous) => ({ ...previous, [placeholder.id]: event.target.value }))} placeholder="可选：说明需要的语气、内容或关注点" value={aiPrompts[placeholder.id] ?? ""} />
+              </label>
+              <Button disabled={busy} onClick={() => void generateAiCandidate(placeholder.id)} size="sm" type="button" variant="outline">生成 AI 候选</Button>
+            </div>
             <div className="grid gap-2 border-t pt-3">
               {loadedPeriod === metricPeriod ? <><Select aria-label={`选择指标 ${placeholder.key}`} onValueChange={(next) => setMetricChoices({ ...metricChoices, [placeholder.id]: next })} options={metrics.map((metric) => ({ value: metric.definitionId, label: `${metric.name}（${metric.code}）· ${metric.valueText}${metric.unit ?? ""} · ${metric.dataSource.name}` }))} placeholder="请选择指标" value={metricChoices[placeholder.id] ?? ""} /><Button disabled={busy || !metricChoices[placeholder.id]} onClick={() => mutate(`/api/report-tasks/${review.task.id}/final-values/${placeholder.id}`, "PUT", { resolutionType: "DATABASE_METRIC", metricDefinitionId: metricChoices[placeholder.id], metricPeriod })} size="sm" type="button" variant="outline">保存指标值</Button></> : <p className="text-xs muted">请先在上方选择有指标的月份并查询。</p>}
             </div>

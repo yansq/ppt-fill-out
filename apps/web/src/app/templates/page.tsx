@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
 import { listTemplates } from "@/features/template/template-service";
 import { TemplateUploadForm } from "@/features/template/template-upload-form";
+import { SampleTemplateForm } from "@/features/template/sample-template-form";
 import { TemplateList } from "@/features/template/template-list";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,12 @@ export default async function TemplatesPage() {
             模板服务暂时不可用，请稍后重试或联系管理员。
           </p>
         )}
+      </section> : null}
+
+      {actor.roles.has("COLLECTOR") && databaseAvailable ? <section className="surface mt-8">
+        <h2 className="text-lg font-semibold">从样例 PPT 生成模板</h2>
+        <p className="mb-6 mt-1 text-sm muted">上传已填数据的 PPTX，编辑提示词，让模型提出占位符；确认并调整后再创建模板。</p>
+        <SampleTemplateForm />
       </section> : null}
 
       <TemplateList actorId={actor.id} canManage={actor.roles.has("COLLECTOR")} templates={templates} />

@@ -233,3 +233,50 @@ async function renderPngPreview(endpoint: string, params: object): Promise<Buffe
   }
   return bytes;
 }
+
+const sampleSegmentSchema = z.object({
+  slideIndex: z.number().int().nonnegative(),
+  shapeId: z.number().int(),
+  tableRow: z.number().int().nonnegative().nullable(),
+  tableColumn: z.number().int().nonnegative().nullable(),
+  paragraphIndex: z.number().int().nonnegative(),
+  text: z.string()
+});
+export type SampleSegment = z.infer<typeof sampleSegmentSchema>;
+export const sampleReplacementSchema = z.object({
+  segment: sampleSegmentSchema,
+  originalText: z.string().min(1).max(1000),
+  key: z.string().regex(/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/)
+});
+export type SampleReplacement = z.infer<typeof sampleReplacementSchema>;
+
+async function sampleRequest(endpoint: string, body: object): Promise<Response> {
+  const { serviceUrl, apiKey } = serviceConfiguration();
+  const response = await fetch(new URL(endpoint, serviceUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Internal-Api-Key": apiKey },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(60_000)
+  });
+  if (!response.ok) throw new Error(`PPT Service sample processing failed (${response.status})`);
+  return response;
+}
+
+export async function inspectSample(params: { relativePath: string; sha256: string }): Promise<SampleSegment[]> {
+  const response = await sampleRequest("/ppt/sample-text", params);
+  return z.array(sampleSegmentSchema).parse(await response.json());
+}
+
+export async function createTemplateFromSample(params: {
+  relativePath: string;
+  sha256: string;
+  replacements: SampleReplacement[];
+}): Promise<Buffer> {
+  const response = await sampleRequest("/ppt/template-from-sample", params);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length < 4 || !bytes.subarray(0, 2).equals(Buffer.from("PK"))) {
+    throw new Error("PPT Service returned an invalid PPTX");
+  }
+  return bytes;
+}
