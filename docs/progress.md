@@ -573,3 +573,9 @@
 - [x] 已关联指标的来源显示关联数量并禁止删除；服务端再次检查关联与外键冲突，内置手动来源不可删除。外部数据库内容不受影响。
 
 验证：`pnpm lint`、`pnpm typecheck`、Web 41 文件/129 项测试、`pnpm build` 和 `pnpm db:validate` 通过。Prisma validate 使用仅供模式校验的临时 `DATABASE_URL`，未连接数据库；登录后的删除交互尚未实际点击验证。Java 服务与数据库模式未改动。
+
+### 2026-09-28 — 已导出任务后续提示调整
+
+- [x] “已导出”任务的下一步提示改为“查看任务”，并统一状态映射格式。
+
+验证：`pnpm lint`、`pnpm typecheck`、Web 41 文件/129 项测试及 `pnpm build` 通过。
