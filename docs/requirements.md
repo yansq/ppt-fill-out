@@ -137,6 +137,7 @@
 
 - 系统数据库和指标数据源解耦。首版实现 `MySQLMetricDataSource`，统一接口支持查询、更新和连接测试。
 - 数据源密码必须加密存储，密钥由运行环境注入；日志和 API 响应不得返回密文或明文密码。
+- 收集人可删除未关联指标的外部数据源连接配置；有关联指标时禁止删除并说明原因，内置手动来源不可删除。
 - AI 使用 Vercel AI SDK 与 OpenAI-Compatible 配置，Provider、Base URL、Key、Model 均来自配置。
 - AI 只生成文本候选，不读写 PPT、不直接形成 FinalValue；生成、编辑、确认过程均可审计。
 

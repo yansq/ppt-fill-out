@@ -2,7 +2,7 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { redirect } from "next/navigation";
 
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
-import { DataSourceForm, TestDataSourceButton } from "@/features/data-source/data-source-form";
+import { DataSourceForm, DeleteDataSourceButton, TestDataSourceButton } from "@/features/data-source/data-source-form";
 import { listDataSources } from "@/features/data-source/data-source-service";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,7 @@ export default async function DataSourcesPage() {
           <h3 className="font-semibold">{source.name}</h3>
           <p className="my-2 text-sm">{source.host}:{source.port}/{source.databaseName} · {source.username} · {{ ACTIVE: "可用", DISABLED: "已停用", ERROR: "连接异常" }[source.status]}</p>
           <TestDataSourceButton id={source.id} />
+          <DeleteDataSourceButton id={source.id} metricCount={source._count.metricDefinitions} name={source.name} />
         </article>)}</div>}
     </section>
   </main></WorkspaceShell>;

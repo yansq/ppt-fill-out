@@ -81,3 +81,41 @@ export function TestDataSourceButton({ id }: { id: string }) {
     {message ? <span className="text-sm" role="status">{message}</span> : null}
   </div>;
 }
+
+export function DeleteDataSourceButton({ id, name, metricCount }: { id: string; name: string; metricCount: number }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function remove() {
+    setPending(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/data-sources/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await response.json() as { error?: { message: string } };
+        throw new Error(payload.error?.message ?? "删除数据源失败");
+      }
+      setConfirming(false);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "数据源服务暂时不可用");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return <div className="mt-3 text-sm">
+    <Button disabled={pending || metricCount > 0} onClick={() => { setConfirming(true); setMessage(""); }} size="sm" type="button" variant="outline">删除数据源</Button>
+    {metricCount > 0 ? <p className="mt-2 muted">已关联 {metricCount} 个指标，无法删除。</p> : null}
+    {confirming ? <div aria-label={`删除 ${name}`} className="mt-3 rounded-md border bg-background p-4" role="group">
+      <p>确定删除“{name}”？平台保存的连接配置将被删除，外部数据库中的数据不会改变。</p>
+      <div className="mt-3 flex gap-2">
+        <Button disabled={pending} onClick={remove} size="sm" type="button">{pending ? "删除中…" : "确认删除"}</Button>
+        <Button disabled={pending} onClick={() => { setConfirming(false); setMessage(""); }} size="sm" type="button" variant="outline">取消</Button>
+      </div>
+    </div> : null}
+    {message ? <p className="mt-2" role="alert">{message}</p> : null}
+  </div>;
+}

@@ -6,7 +6,8 @@ const { requireCollector, prisma, probe } = vi.hoisted(() => ({
   requireCollector: vi.fn(),
   prisma: {
     $transaction: vi.fn(),
-    dataSource: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
+    dataSource: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    metricDefinition: { count: vi.fn() },
     operationLog: { create: vi.fn() }
   },
   probe: vi.fn()
@@ -23,7 +24,7 @@ vi.mock("./mysql-adapter", () => ({
   }
 }));
 
-import { createDataSource, listDataSources, testDataSource } from "./data-source-service";
+import { createDataSource, deleteDataSource, listDataSources, testDataSource } from "./data-source-service";
 import { decryptPassword, encryptPassword } from "./credential";
 
 beforeEach(() => {
@@ -70,5 +71,27 @@ describe("data-source service boundary", () => {
     const audit = prisma.operationLog.create.mock.calls[0][0].data;
     expect(audit.action).toBe("DATA_SOURCE_TEST_FAILED");
     expect(JSON.stringify(audit)).not.toContain("private-password");
+  });
+
+  it("deletes only an unused external source and records an audit entry", async () => {
+    prisma.dataSource.findUnique.mockResolvedValue({ id: "source-1", name: "经营库", type: "MYSQL" });
+    prisma.metricDefinition.count.mockResolvedValue(0);
+    await deleteDataSource("source-1");
+    expect(prisma.dataSource.delete).toHaveBeenCalledWith({ where: { id: "source-1" } });
+    expect(prisma.operationLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "DATA_SOURCE_DELETED", resourceId: "source-1", metadataJson: { name: "经营库", type: "MYSQL" } }) });
+  });
+
+  it("refuses to delete linked metrics or the built-in manual source", async () => {
+    prisma.dataSource.findUnique.mockResolvedValueOnce({ id: "source-1", name: "经营库", type: "MYSQL" }).mockResolvedValueOnce({ id: "manual-metrics", name: "手动录入", type: "MANUAL" });
+    prisma.metricDefinition.count.mockResolvedValue(1);
+    await expect(deleteDataSource("source-1")).rejects.toMatchObject({ code: "DATA_SOURCE_IN_USE", status: 409 });
+    await expect(deleteDataSource("manual-metrics")).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+    expect(prisma.dataSource.delete).not.toHaveBeenCalled();
+  });
+
+  it("requires Collector permission before deletion", async () => {
+    requireCollector.mockRejectedValue(new Error("FORBIDDEN"));
+    await expect(deleteDataSource("source-1")).rejects.toThrow("FORBIDDEN");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

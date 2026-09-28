@@ -30,7 +30,38 @@ const publicFields = {
 
 export async function listDataSources() {
   await requireCollector();
-  return prisma.dataSource.findMany({ where: { type: { not: "MANUAL" } }, select: publicFields, orderBy: { createdAt: "desc" } });
+  return prisma.dataSource.findMany({
+    where: { type: { not: "MANUAL" } },
+    select: { ...publicFields, _count: { select: { metricDefinitions: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+}
+
+export async function deleteDataSource(dataSourceId: string) {
+  const actor = await requireCollector();
+  try {
+    await prisma.$transaction(async (tx) => {
+      const source = await tx.dataSource.findUnique({
+        where: { id: dataSourceId }, select: { id: true, name: true, type: true }
+      });
+      if (!source || source.type === "MANUAL") throw new DataSourceError("NOT_FOUND", "数据源不存在", 404);
+      const definitionCount = await tx.metricDefinition.count({ where: { dataSourceId } });
+      if (definitionCount > 0) {
+        throw new DataSourceError("DATA_SOURCE_IN_USE", "该数据源已有指标，无法删除", 409);
+      }
+      await tx.dataSource.delete({ where: { id: dataSourceId } });
+      await tx.operationLog.create({ data: {
+        actorId: actor.id, action: "DATA_SOURCE_DELETED", resourceType: "DataSource",
+        resourceId: source.id, correlationId: randomUUID(),
+        metadataJson: { name: source.name, type: source.type }
+      } });
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      throw new DataSourceError("DATA_SOURCE_IN_USE", "该数据源已有指标，无法删除", 409);
+    }
+    throw error;
+  }
 }
 
 export async function createDataSource(input: unknown) {
