@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@report-platform/ui/button";
@@ -11,6 +11,7 @@ type Draft = { sha256: string; segments: SampleSegment[]; replacements: SampleRe
 
 export function SampleTemplateForm() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("识别样例PPT中每期、每人或每个项目会变化的具体文字、数字或日期，提出适合重用的占位符。保留标题、说明和固定文字。key 使用有意义的英文或拼音，且同一含义复用同一 key。");
@@ -24,6 +25,7 @@ export function SampleTemplateForm() {
     setFile(nextFile);
     setDraft(null);
     setReplacements([]);
+    setError("");
     setSuccess("");
   }
 
@@ -100,26 +102,28 @@ export function SampleTemplateForm() {
   return <div className="space-y-5">
     <div className="grid gap-2">
       <label className="text-sm font-medium" htmlFor="sample-name">模板名称</label>
-      <input className="h-10 rounded-md border bg-background px-3 text-sm" id="sample-name" maxLength={191} onChange={(event) => setName(event.target.value)} placeholder="例如：月度经营报告" value={name} />
+      <input className="h-10 w-full rounded-md border bg-background px-3 text-sm" disabled={busy} id="sample-name" maxLength={191} onChange={(event) => setName(event.target.value)} placeholder="例如：月度经营报告" value={name} />
     </div>
     <div className="grid gap-2">
       <label className="text-sm font-medium" htmlFor="sample-file">已填数据的样例 PPTX</label>
-      <div className="flex min-w-0 items-center gap-3 rounded-md border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
+      <div className="flex min-w-0 items-center gap-3 rounded-md border bg-background p-2">
         <input
           accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
           className="sr-only"
           disabled={busy}
           id="sample-file"
           onChange={(event) => changeFile(event.currentTarget.files?.[0] ?? null)}
+          ref={fileInputRef}
+          tabIndex={-1}
           type="file"
         />
-        <Button asChild size="sm" variant="outline"><label className="shrink-0 cursor-pointer" htmlFor="sample-file">选择文件</label></Button>
+        <Button disabled={busy} onClick={() => fileInputRef.current?.click()} size="sm" type="button" variant="outline">选择文件</Button>
         <span aria-live="polite" className="min-w-0 flex-1 truncate text-sm muted" title={file?.name}>{file?.name || "未选择文件"}</span>
       </div>
     </div>
     <div className="grid gap-2">
       <label className="text-sm font-medium" htmlFor="sample-prompt">生成提示词</label>
-      <textarea className="min-h-24 w-full rounded-md border bg-background p-3 text-sm" id="sample-prompt" maxLength={4000} onChange={(event) => setPrompt(event.target.value)} value={prompt} />
+      <textarea className="min-h-24 w-full rounded-md border bg-background p-3 text-sm" disabled={busy} id="sample-prompt" maxLength={4000} onChange={(event) => setPrompt(event.target.value)} value={prompt} />
     </div>
     <Button disabled={busy || !file || !prompt.trim()} onClick={() => void submit("generate")} type="button">{busy ? "处理中…" : draft ? "重新生成候选" : "生成占位符候选"}</Button>
     {draft ? <section className="space-y-4 rounded-md border bg-background p-4" aria-label="占位符确认">
@@ -143,7 +147,7 @@ export function SampleTemplateForm() {
       <p className="text-sm muted">请先下载待确认 PPTX 检查页面与占位符；如需修改上方原文或 key，可再次下载。确认后保存正式模板。</p>
       <div className="flex flex-wrap gap-2"><Button disabled={busy || replacements.length === 0} onClick={() => void downloadPreview()} type="button" variant="outline">下载待确认 PPTX</Button><Button disabled={busy || !name.trim() || replacements.length === 0} onClick={() => void submit("confirm")} type="button">确认并保存模板</Button></div>
     </section> : null}
-    {error ? <p className="text-sm text-foreground" role="alert">{error}</p> : null}
+    {error ? <p className="form-error" role="alert">{error}</p> : null}
     {success ? <p className="text-sm text-primary" role="status">{success}</p> : null}
   </div>;
 }

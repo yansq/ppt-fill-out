@@ -45,7 +45,7 @@ export function CreateTaskForm({ templates }: { templates: TemplateOption[] }) {
   }
 
   return (
-    <form className="grid gap-4 md:grid-cols-4 md:items-end" onSubmit={submit}>
+    <form className="task-create-form grid gap-4" onSubmit={submit}>
       <label className="grid gap-2 text-sm font-medium">
         任务名称
         <input className="h-10 rounded-md border bg-background px-3" maxLength={191} name="name" required />
@@ -59,7 +59,7 @@ export function CreateTaskForm({ templates }: { templates: TemplateOption[] }) {
         <input className="h-10 rounded-md border bg-background px-3" name="reportPeriod" required type="month" />
       </label>
       <Button disabled={pending || templates.length === 0} type="submit">{pending ? "创建中…" : "创建任务"}</Button>
-      {error ? <p className="text-sm text-primary md:col-span-4" role="alert">{error}</p> : null}
+      {error ? <p className="text-sm text-primary" role="alert">{error}</p> : null}
     </form>
   );
 }

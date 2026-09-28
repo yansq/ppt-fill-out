@@ -24,10 +24,13 @@ describe("page assignment", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AssignmentForm fillers={fillers} slides={slides} taskId="task" version={3} />);
 
+    expect(screen.getByRole("button", { name: "查看第 2 页分配" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "查看第 1 页分配" }));
     expect(screen.getByRole("link", { name: "查看第 1 页大图" }).getAttribute("href")).toBe(slides[0].previewUrl);
-    expect(screen.getByText("无需分配")).toBeTruthy();
+    expect(screen.getAllByText("无需分配")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "选择第 1 页填报人" })).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: "查看第 2 页分配" }));
     fireEvent.click(screen.getByRole("button", { name: "选择第 2 页填报人" }));
     fireEvent.change(screen.getByRole("searchbox", { name: "搜索第 2 页填报人" }), { target: { value: "100002" } });
     const results = screen.getByRole("group", { name: "第 2 页可选填报人" });
@@ -59,6 +62,32 @@ describe("page assignment", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       expectedVersion: 3,
       assignments: [{ slideId: "content", employeeNumber: "001234" }]
+    });
+  });
+
+  it("keeps selections on other pages and saves all page assignments together", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const assignableSlides = [
+      slides[1],
+      { id: "summary", slideIndex: 2, previewUrl: null, placeholderCount: 1, assignments: [] }
+    ];
+    render(<AssignmentForm fillers={fillers} slides={assignableSlides} taskId="task" version={3} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "选择第 2 页填报人" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "第 2 页可选填报人" })).getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "查看第 3 页分配" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择第 3 页填报人" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "第 3 页可选填报人" })).getAllByRole("checkbox")[1]);
+    fireEvent.click(screen.getByRole("button", { name: "保存页面分配" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      expectedVersion: 3,
+      assignments: [
+        { slideId: "content", assigneeId: "alice" },
+        { slideId: "summary", assigneeId: "bob" }
+      ]
     });
   });
 });

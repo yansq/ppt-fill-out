@@ -12,17 +12,14 @@ export default async function RegisterPage() {
   }
 
   return <main className="login-page">
-    <section className="login-intro">
-      <span className="login-mark">报</span>
-      <p className="eyebrow">报告协作平台</p>
-      <h1>注册填报账号，<br />完成分配给你的页面。</h1>
-      <p>使用六位工号注册。若收集人已提前分配任务，注册后即可在“我的填报”查看。</p>
-    </section>
-    <section aria-label="注册填报人账号" className="login-card">
-      <p className="eyebrow">员工注册</p>
-      <h2>创建填报人账号</h2>
-      <p className="muted mt-2">注册仅开通填报权限，不提供收集人权限。</p>
-      <RegisterForm />
-    </section>
+    <div className="auth-panel">
+      <div className="auth-brand"><span className="login-mark">报</span><span>报告协作平台</span></div>
+      <section aria-label="注册填报人账号" className="login-card">
+        <p className="eyebrow">员工注册</p>
+        <h1>创建填报人账号</h1>
+        <p className="muted mt-2">使用六位工号注册。账号仅有填报权限。</p>
+        <RegisterForm />
+      </section>
+    </div>
   </main>;
 }

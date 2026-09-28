@@ -17,11 +17,11 @@ export default async function MetricsPage() {
   if (!actor.roles.has("COLLECTOR")) redirect("/my-tasks");
 
   return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="metrics" username={actor.username}><main className="page-container">
-    <header className="mb-8 flex items-start justify-between gap-4">
+    <header className="page-heading">
       <div>
-        <p className="eyebrow">收集人 · 指标管理</p>
-        <h1 className="text-3xl font-semibold">指标管理</h1>
-        <p className="mt-2 text-sm">手动录入指标，或按月份查看、核对和修改已有指标。</p>
+        <p className="eyebrow">指标管理</p>
+        <h1>指标管理</h1>
+        <p className="page-intro">按月份查看指标，核对来源和修改记录。</p>
       </div>
     </header>
     <MetricManager initialPeriod={new Date().toISOString().slice(0, 7)} />

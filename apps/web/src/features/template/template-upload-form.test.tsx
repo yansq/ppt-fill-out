@@ -24,6 +24,10 @@ describe("template upload file picker", () => {
     expect(screen.getByText("未选择文件")).toBeTruthy();
     expect(screen.getByText("选择文件")).toBeTruthy();
     expect(input.accept).toContain(".pptx");
+    expect(input.tabIndex).toBe(-1);
+    const openPicker = vi.spyOn(input, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "选择文件" }));
+    expect(openPicker).toHaveBeenCalledOnce();
 
     const file = new File(["pptx"], "月度经营报告.pptx", { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
     fireEvent.change(input, { target: { files: [file] } });
@@ -45,5 +49,7 @@ describe("template upload file picker", () => {
     fireEvent.submit(container.querySelector("form")!);
     expect(screen.getByText("请选择 PPTX 文件")).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File(["pptx"], "修正后.pptx")] } });
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

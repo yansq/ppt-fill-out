@@ -49,21 +49,21 @@ export default async function FillInstancePage({
       username={actor.username}
     >
       <main className="page-container fill-page-container">
-        <header className="mb-4 border-b pb-4">
+        <header className="detail-header">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-primary">
+            <p className="eyebrow">
               报告周期 {instance.task.reportPeriod}
             </p>
-            <h1 className="truncate text-2xl font-semibold">
+            <h1 className="truncate">
               {instance.task.name} · 第 {instance.slideIndex + 1} 页
             </h1>
-            <p className="text-sm muted">
+            <p className="detail-meta">
               填报人：{instance.assignee.name || instance.assignee.username} ·
               状态：{instanceStatusText[instance.status]}
             </p>
           </div>
         </header>
-        <p className="mb-4 text-sm text-primary">
+        <p className="my-5 text-sm text-primary">
           {instance.status === "NOT_STARTED"
             ? "先查看模板页，确认填写位置，然后开始填报。"
             : instance.status === "RETURNED"

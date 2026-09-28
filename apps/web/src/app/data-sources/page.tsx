@@ -2,43 +2,28 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { redirect } from "next/navigation";
 
 import { AuthorizationError, currentActor } from "@/features/auth/authorization";
-import { DataSourceForm, DeleteDataSourceButton, TestDataSourceButton } from "@/features/data-source/data-source-form";
+import { DataSourceCardActions, DataSourceForm } from "@/features/data-source/data-source-form";
 import { listDataSources } from "@/features/data-source/data-source-service";
 
 export const dynamic = "force-dynamic";
 
 export default async function DataSourcesPage() {
   let actor;
-  try {
-    actor = await currentActor();
-  } catch (error) {
-    if (error instanceof AuthorizationError) redirect("/login?callbackUrl=/data-sources");
-    throw error;
-  }
+  try { actor = await currentActor(); }
+  catch (error) { if (error instanceof AuthorizationError) redirect("/login?callbackUrl=/data-sources"); throw error; }
   if (!actor.roles.has("COLLECTOR")) redirect("/my-tasks");
   const sources = await listDataSources();
 
   return <WorkspaceShell collector employeeNumber={actor.employeeNumber} filler={actor.roles.has("FILLER")} section="sources" username={actor.username}><main className="page-container">
-    <header className="mb-8 flex items-start justify-between gap-4">
-      <div>
-        <p className="eyebrow">收集人 · 数据源</p>
-        <h1 className="text-3xl font-semibold">指标数据源</h1>
-        <p className="mt-2 text-sm">配置指标库连接，保存后测试是否可用。</p>
-      </div>
-    </header>
-    <section className="rounded-lg border bg-card p-6 shadow-sm">
-      <h2 className="mb-5 text-lg font-semibold">新增数据源</h2>
-      <DataSourceForm />
-    </section>
-    <section className="mt-10">
-      <h2 className="mb-4 text-xl font-semibold">已配置的数据源</h2>
-      {sources.length === 0 ? <p className="rounded-lg border bg-card p-6 text-sm">暂无数据源。</p> :
-        <div className="space-y-3">{sources.map((source) => <article className="rounded-lg border bg-card p-5" key={source.id}>
-          <h3 className="font-semibold">{source.name}</h3>
-          <p className="my-2 text-sm">{source.host}:{source.port}/{source.databaseName} · {source.username} · {{ ACTIVE: "可用", DISABLED: "已停用", ERROR: "连接异常" }[source.status]}</p>
-          <TestDataSourceButton id={source.id} />
-          <DeleteDataSourceButton id={source.id} metricCount={source._count.metricDefinitions} name={source.name} />
+    <header className="page-heading"><div><p className="eyebrow">指标管理</p><h1>指标数据源</h1><p className="page-intro">管理指标库连接配置，并按需测试连通性。</p></div></header>
+    <section>
+      <div className="section-heading"><div><h2>已配置的数据源</h2><p>已保存的连接配置</p></div><span className="muted text-sm">共 {sources.length} 个</span></div>
+      {sources.length === 0 ? <div className="empty-state">暂无数据源。<a href="#new-source">新增数据源 →</a></div> :
+        <div className="data-source-list">{sources.map((source) => <article className="data-source-card" key={source.id}>
+          <div className="data-source-card-details"><h3>{source.name}</h3><p>{source.host}:{source.port}/{source.databaseName} · {source.username}</p></div>
+          <DataSourceCardActions id={source.id} metricCount={source._count.metricDefinitions} name={source.name} status={source.status} />
         </article>)}</div>}
     </section>
+    <section className="surface mt-9" id="new-source"><div className="section-heading"><div><h2>新增数据源</h2><p>保存配置后，可以在上方列表中测试连接。</p></div></div><DataSourceForm /></section>
   </main></WorkspaceShell>;
 }

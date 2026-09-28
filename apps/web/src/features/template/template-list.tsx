@@ -59,13 +59,14 @@ function TemplateRow({ template, actorId, canManage, onDeleted }: { template: Te
     }
   }
 
-  return <article className="rounded-lg border bg-card p-5 shadow-sm">
+  return <article className="rounded-lg border bg-card p-5">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 flex-1">
-        <h3 className="text-lg font-semibold">{template.name} <span className="text-sm font-normal">第 {template.version} 版</span></h3>
-        <p className="mt-1 break-all text-sm muted">{template.originalFilename} · {templateStatusText[template.status] ?? "待处理"} · {template.slideCount} 页</p>
+        <h3 className="text-base font-semibold">{template.name} <span className="ml-1 text-sm font-normal muted">第 {template.version} 版</span></h3>
+        <p className="mt-1 break-all text-sm muted">{template.originalFilename} · {template.slideCount} 页</p>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="status-pill mr-2">{templateStatusText[template.status] ?? "待处理"}</span>
         <Button aria-controls={`template-pages-${template.id}`} aria-expanded={open} onClick={toggle} type="button" variant="outline">{open ? "收起页面" : "查看页面"}</Button>
         {canManage && template.createdById === actorId && template.status !== "PARSING" && template.status !== "UPLOADING" ? <Button disabled={deleting} onClick={() => setConfirmDelete(true)} type="button" variant="outline">删除模板</Button> : null}
       </div>
@@ -77,7 +78,7 @@ function TemplateRow({ template, actorId, canManage, onDeleted }: { template: Te
         <Button disabled={deleting} onClick={() => setConfirmDelete(false)} size="sm" type="button" variant="outline">取消</Button>
       </div>
     </div> : null}
-    {error ? <p className="mt-3 text-sm" role="alert">{error}</p> : null}
+    {error ? <p className="form-error mt-3" role="alert">{error}</p> : null}
     {open ? <div className="mt-5" id={`template-pages-${template.id}`}>
       {loading ? <p className="text-sm muted">正在加载页面…</p> : details ? <>
         {details.status === "PARSE_FAILED" && canManage && template.createdById === actorId ? <div className="mb-4"><TemplateRetryButton templateId={template.id} /></div> : null}
@@ -94,8 +95,8 @@ function TemplateRow({ template, actorId, canManage, onDeleted }: { template: Te
 export function TemplateList({ templates, actorId, canManage }: { templates: TemplateSummary[]; actorId: string; canManage: boolean }) {
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const visible = templates.filter((template) => !hiddenIds.includes(template.id));
-  return <section className="mt-10">
+  return <section className="mt-8">
     <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">已上传模板</h2><span className="text-sm">{visible.length} 个版本</span></div>
-    {visible.length === 0 ? <div className="rounded-lg border bg-card p-8 text-center text-sm">暂无已上传模板</div> : <div className="space-y-3">{visible.map((template) => <TemplateRow actorId={actorId} canManage={canManage} key={`${template.id}-${template.status}`} onDeleted={(id) => setHiddenIds((ids) => [...ids, id])} template={template} />)}</div>}
+    {visible.length === 0 ? <div className="rounded-lg border bg-card p-8 text-center text-sm"><p>暂无已上传模板</p>{canManage ? <p className="mt-1 muted">可通过上方入口添加</p> : null}</div> : <div className="space-y-3">{visible.map((template) => <TemplateRow actorId={actorId} canManage={canManage} key={`${template.id}-${template.status}`} onDeleted={(id) => setHiddenIds((ids) => [...ids, id])} template={template} />)}</div>}
   </section>;
 }

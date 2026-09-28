@@ -100,6 +100,7 @@ export function AssignmentForm({ taskId, version, slides, fillers }: {
   const [selected, setSelected] = useState(() => new Set(slides.filter((slide) => slide.placeholderCount > 0).flatMap((slide) =>
     slide.assignments.map((assignment) => `${slide.id}:${assignment.assignee.id}`)
   )));
+  const [selectedSlideId, setSelectedSlideId] = useState(() => slides.find((slide) => slide.placeholderCount > 0)?.id ?? slides[0]?.id ?? "");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -140,10 +141,24 @@ export function AssignmentForm({ taskId, version, slides, fillers }: {
   }
 
   const assignableCount = slides.filter((slide) => slide.placeholderCount > 0).length;
+  const selectedSlide = slides.find((slide) => slide.id === selectedSlideId) ?? slides[0];
   return <div className="space-y-5">
     <p className="text-sm muted">共 {slides.length} 页，其中 {assignableCount} 页需要填报。可按页搜索并选择一位或多位填报人。</p>
     {fillers.length === 0 && assignableCount > 0 ? <p className="text-sm">暂无已注册填报人，可输入六位工号添加未注册员工。</p> : null}
-    {slides.map((slide) => <SlideAssignment fillers={fillers} key={slide.id} onToggle={toggle} pending={pending} selected={selected} slide={slide} />)}
+    {selectedSlide ? <div className="task-assignment-layout">
+      <nav aria-label="分配页面导航" className="task-assignment-nav rounded-lg border bg-card p-3">
+        <p className="px-3 pb-2 text-sm font-semibold">报告页面</p>
+        {slides.map((slide) => <button
+          aria-label={`查看第 ${slide.slideIndex + 1} 页分配`}
+          aria-pressed={slide.id === selectedSlide.id}
+          disabled={pending}
+          key={slide.id}
+          onClick={() => setSelectedSlideId(slide.id)}
+          type="button"
+        ><span>第 {slide.slideIndex + 1} 页</span><span className="text-xs">{slide.placeholderCount ? `${[...selected].filter((key) => key.startsWith(`${slide.id}:`)).length} 人` : "无需分配"}</span></button>)}
+      </nav>
+      <SlideAssignment fillers={fillers} key={selectedSlide.id} onToggle={toggle} pending={pending} selected={selected} slide={selectedSlide} />
+    </div> : <p className="rounded-lg border bg-card p-5 text-sm muted">模板暂无页面。</p>}
     <div className="flex flex-wrap items-center gap-4">
       <Button disabled={pending} onClick={save} type="button">{pending ? "保存中…" : "保存页面分配"}</Button>
       {message ? <span className="text-sm" role="status">{message}</span> : null}

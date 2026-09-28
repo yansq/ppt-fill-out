@@ -58,39 +58,36 @@ export function DataSourceForm() {
   </form>;
 }
 
-export function TestDataSourceButton({ id }: { id: string }) {
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
+export function DataSourceCardActions({ id, name, metricCount, status }: {
+  id: string;
+  name: string;
+  metricCount: number;
+  status: "ACTIVE" | "DISABLED" | "ERROR";
+}) {
+  const router = useRouter();
+  const [testing, setTesting] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState("");
 
   async function testConnection() {
-    setPending(true);
-    setMessage("");
+    setTesting(true);
+    setTestMessage("");
     try {
       const response = await fetch(`/api/data-sources/${id}/test`, { method: "POST" });
       const payload = await response.json() as { latencyMs?: number; error?: { message: string } };
-      setMessage(response.ok ? `连接成功 · ${payload.latencyMs ?? 0} ms` : payload.error?.message ?? "连接失败");
+      setTestMessage(response.ok ? `连接成功 · ${payload.latencyMs ?? 0} ms` : payload.error?.message ?? "连接失败");
     } catch {
-      setMessage("数据源服务暂时不可用");
+      setTestMessage("数据源服务暂时不可用");
     } finally {
-      setPending(false);
+      setTesting(false);
     }
   }
 
-  return <div className="flex items-center gap-3">
-    <Button disabled={pending} onClick={testConnection} type="button" variant="outline">{pending ? "测试中…" : "测试连接"}</Button>
-    {message ? <span className="text-sm" role="status">{message}</span> : null}
-  </div>;
-}
-
-export function DeleteDataSourceButton({ id, name, metricCount }: { id: string; name: string; metricCount: number }) {
-  const router = useRouter();
-  const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
-
   async function remove() {
-    setPending(true);
-    setMessage("");
+    setDeleting(true);
+    setDeleteMessage("");
     try {
       const response = await fetch(`/api/data-sources/${id}`, { method: "DELETE" });
       if (!response.ok) {
@@ -100,22 +97,30 @@ export function DeleteDataSourceButton({ id, name, metricCount }: { id: string; 
       setConfirming(false);
       router.refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "数据源服务暂时不可用");
+      setDeleteMessage(error instanceof Error ? error.message : "数据源服务暂时不可用");
     } finally {
-      setPending(false);
+      setDeleting(false);
     }
   }
 
-  return <div className="mt-3 text-sm">
-    <Button disabled={pending || metricCount > 0} onClick={() => { setConfirming(true); setMessage(""); }} size="sm" type="button" variant="outline">删除数据源</Button>
-    {metricCount > 0 ? <p className="mt-2 muted">已关联 {metricCount} 个指标，无法删除。</p> : null}
-    {confirming ? <div aria-label={`删除 ${name}`} className="mt-3 rounded-md border bg-background p-4" role="group">
+  const statusLabel = { ACTIVE: "已启用", DISABLED: "已停用", ERROR: "连接异常" }[status];
+  const reasonId = `data-source-delete-reason-${id}`;
+
+  return <div className="data-source-card-actions">
+    <div className="data-source-card-toolbar">
+      <span className="status-pill" data-status={status}>{statusLabel}</span>
+      <Button disabled={testing} onClick={testConnection} size="sm" type="button" variant="outline">{testing ? "测试中…" : "测试连接"}</Button>
+      <Button aria-describedby={metricCount > 0 ? reasonId : undefined} disabled={deleting || metricCount > 0} onClick={() => { setConfirming(true); setDeleteMessage(""); }} size="sm" type="button" variant="outline">删除数据源</Button>
+    </div>
+    {metricCount > 0 ? <p className="data-source-card-note" id={reasonId}>已关联 {metricCount} 个指标，无法删除。</p> : null}
+    {testMessage ? <p className="data-source-card-feedback" role="status">{testMessage}</p> : null}
+    {confirming ? <div aria-label={`删除 ${name}`} className="data-source-card-confirm" role="group">
       <p>确定删除“{name}”？平台保存的连接配置将被删除，外部数据库中的数据不会改变。</p>
-      <div className="mt-3 flex gap-2">
-        <Button disabled={pending} onClick={remove} size="sm" type="button">{pending ? "删除中…" : "确认删除"}</Button>
-        <Button disabled={pending} onClick={() => { setConfirming(false); setMessage(""); }} size="sm" type="button" variant="outline">取消</Button>
+      <div className="data-source-card-confirm-actions">
+        <Button disabled={deleting} onClick={remove} size="sm" type="button">{deleting ? "删除中…" : "确认删除"}</Button>
+        <Button disabled={deleting} onClick={() => { setConfirming(false); setDeleteMessage(""); }} size="sm" type="button" variant="outline">取消</Button>
       </div>
     </div> : null}
-    {message ? <p className="mt-2" role="alert">{message}</p> : null}
+    {deleteMessage ? <p className="data-source-card-feedback" role="alert">{deleteMessage}</p> : null}
   </div>;
 }

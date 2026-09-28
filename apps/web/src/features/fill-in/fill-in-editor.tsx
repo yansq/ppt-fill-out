@@ -288,6 +288,10 @@ export function FillInEditor({
               src={previewUrl}
             />
           </section>
+
+        </div>
+
+        <div className="min-w-0 space-y-5">
           <section className="rounded-xl border bg-card p-5">
             <h2 className="text-lg font-semibold">引用数据库指标</h2>
             <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -334,9 +338,6 @@ export function FillInEditor({
               </details>
             ) : null}
           </section>
-        </div>
-
-        <div className="min-w-0 space-y-5">
           <section className="rounded-xl border bg-card p-5">
             <h2 className="mb-4 text-lg font-semibold">填写内容</h2>
             <div className="space-y-4">

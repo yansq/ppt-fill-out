@@ -20,6 +20,10 @@ describe("sample template form", () => {
     const { container } = render(<SampleTemplateForm />);
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput.className).toContain("sr-only");
+    expect(fileInput.tabIndex).toBe(-1);
+    const openPicker = vi.spyOn(fileInput, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "选择文件" }));
+    expect(openPicker).toHaveBeenCalledOnce();
     expect(screen.getByText("选择文件")).toBeTruthy();
     expect(screen.getByText("未选择文件")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("模板名称"), { target: { value: "月报" } });
