@@ -52,6 +52,7 @@ enum FinalResolutionType {
 }
 
 enum DataSourceType {
+  MANUAL
   MYSQL
   OCEANBASE
   ORACLE

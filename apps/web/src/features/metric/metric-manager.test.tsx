@@ -8,6 +8,61 @@ import { MetricManager } from "./metric-manager";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("metric manager month loading", () => {
+  it("records an empty month's value for an existing manual metric", async () => {
+    const metric = {
+      definitionId: "manual-1", code: "income", name: "营业收入", valueText: "120",
+      valueType: "NUMBER", unit: "万元", period: "2026-09", version: 1,
+      updatedAt: "2026-09-28T00:00:00.000Z", updatedBy: "collector", dataSource: { id: "manual-metrics", name: "手动录入" }
+    };
+    let saved = false;
+    const fetchMock = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes("/periods")) return Promise.resolve({ ok: true, json: async () => ({ periods: ["2026-09"] }) });
+      if (url === "/api/metrics/manual-1" && options?.method === "PUT") {
+        expect(JSON.parse(String(options.body))).toMatchObject({ period: "2026-09", value: "120", expectedVersion: 0, reason: "本月补录" });
+        saved = true;
+        return Promise.resolve({ ok: true, json: async () => ({ metric }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ period: "2026-09", page: 1, pageSize: 20, total: 1, items: [{ ...metric, manual: true, writable: true, metric: saved ? metric : null }] }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MetricManager initialPeriod="2026-09" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "录入本月值" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "录入本月值" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "本月指标值" }), { target: { value: "120" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "修改原因" }), { target: { value: "本月补录" } });
+    fireEvent.click(screen.getByRole("button", { name: "录入本月值" }));
+    await waitFor(() => expect(screen.getByRole("cell", { name: "120 万元" })).toBeTruthy());
+  });
+
+  it("creates a manual metric and reloads its newly available month", async () => {
+    let created = false;
+    const metric = {
+      definitionId: "manual-1", code: "income", name: "营业收入", valueText: "100",
+      valueType: "NUMBER", unit: "万元", period: "2026-10", version: 1,
+      updatedAt: "2026-09-28T00:00:00.000Z", updatedBy: "collector", dataSource: { id: "manual-metrics", name: "手动录入" }
+    };
+    const fetchMock = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/metrics/manual" && options?.method === "POST") {
+        created = true;
+        expect(JSON.parse(String(options.body))).toMatchObject({ code: "income", period: "2026-10", value: "100", valueType: "NUMBER" });
+        return Promise.resolve({ ok: true, json: async () => ({ metric }) });
+      }
+      if (url.includes("/periods")) return Promise.resolve({ ok: true, json: async () => ({ periods: created ? ["2026-09", "2026-10"] : ["2026-09"] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ period: created ? "2026-10" : "2026-09", page: 1, pageSize: 20, total: created ? 1 : 0, items: created ? [{ ...metric, manual: true, writable: true, metric }] : [] }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MetricManager initialPeriod="2026-09" />);
+    fireEvent.click(screen.getByRole("button", { name: "新增指标" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "指标名称" }), { target: { value: "营业收入" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "指标编码" }), { target: { value: "income" } });
+    fireEvent.change(screen.getByLabelText("指标月份", { selector: "input" }), { target: { value: "2026-10" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "指标值" }), { target: { value: "100" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "单位（可选）" }), { target: { value: "万元" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存指标" }));
+    await waitFor(() => expect(screen.getByRole("cell", { name: "100 万元" })).toBeTruthy());
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/periods")).length).toBeGreaterThan(1);
+  });
+
   it("loads the initial month and automatically refreshes after switching months", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.includes("/periods")) return Promise.resolve({ ok: true, json: async () => ({ periods: ["2026-08", "2026-09"] }) });

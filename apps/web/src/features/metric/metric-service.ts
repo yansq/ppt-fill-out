@@ -7,7 +7,7 @@ import { decryptPassword } from "@/features/data-source/credential";
 import { MetricAdapterError, MySqlMetricDataSource, type MetricRecord } from "@/features/data-source/mysql-adapter";
 import { getFillInstance } from "@/features/report-task/report-task-service";
 
-import { demoQueryConfigSchema, metricCatalogQuerySchema, metricYearSchema, periodSchema, updateMetricSchema } from "./metric-policy";
+import { createManualMetricSchema, demoQueryConfigSchema, metricCatalogQuerySchema, metricYearSchema, periodSchema, updateMetricSchema } from "./metric-policy";
 import { hasContinuousHistory } from "./metric-sync-policy";
 
 export class MetricServiceError extends Error {
@@ -55,6 +55,90 @@ function publicMetric(record: MetricRecord, definition: { id: string; name: stri
 }
 
 type DefinitionWithSource = Prisma.MetricDefinitionGetPayload<{ include: { dataSource: true } }>;
+type ManualStoredValue = {
+  metricDefinitionId: string; valueText: string; version: number; fetchedAt: Date;
+  history: { operator: { username: string }; createdAt: Date }[];
+};
+const MANUAL_SOURCE_ID = "manual-metrics";
+const EMPTY_DIMENSIONS_HASH = createHash("sha256").update("{}").digest("hex");
+
+function isManual(definition: DefinitionWithSource) {
+  return definition.dataSource.type === "MANUAL";
+}
+
+function publicManualMetric(value: { valueText: string; version: number; fetchedAt: Date; history: { operator: { username: string }; createdAt: Date }[] }, definition: DefinitionWithSource, period: string) {
+  const latest = value.history[0];
+  return {
+    definitionId: definition.id, code: definition.code, name: definition.name,
+    dataSource: { id: definition.dataSource.id, name: definition.dataSource.name },
+    valueText: value.valueText, valueType: definition.valueType, unit: definition.unit,
+    period, version: value.version,
+    updatedAt: (latest?.createdAt ?? value.fetchedAt).toISOString(),
+    updatedBy: latest?.operator.username ?? "系统"
+  };
+}
+
+async function manualValues(definitions: DefinitionWithSource[], period: string) {
+  const ids = definitions.filter(isManual).map((definition) => definition.id);
+  if (!ids.length) return new Map<string, ManualStoredValue>();
+  const values = await prisma.metricValue.findMany({
+    where: { metricDefinitionId: { in: ids }, period, dimensionsHash: EMPTY_DIMENSIONS_HASH },
+    include: { history: { orderBy: { createdAt: "desc" }, take: 1, include: { operator: { select: { username: true } } } } }
+  });
+  return new Map(values.map((value) => [value.metricDefinitionId, value]));
+}
+
+function assertMetricValue(value: string, valueType: string) {
+  if (valueType === "NUMBER" && (!/^-?\d+(\.\d+)?$/.test(value) || !Number.isFinite(Number(value)) || value.replace(/^-/, "").split(".")[0].length > 47 || (value.split(".")[1]?.length ?? 0) > 18)) {
+    throw new MetricServiceError("VALIDATION_ERROR", "数值指标必须填写有效数字", 400);
+  }
+}
+
+export async function createManualMetric(input: unknown) {
+  const actor = await requireCollector();
+  const parsed = createManualMetricSchema.parse(input);
+  assertMetricValue(parsed.value, parsed.valueType);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const source = await tx.dataSource.upsert({
+        where: { id: MANUAL_SOURCE_ID },
+        create: { id: MANUAL_SOURCE_ID, name: "手动录入", type: "MANUAL", createdById: actor.id },
+        update: {}
+      });
+      if (source.type !== "MANUAL" || source.status !== "ACTIVE") throw new MetricServiceError("DATA_SOURCE_INVALID", "手动指标来源不可用", 409);
+      const existing = await tx.metricDefinition.findUnique({ where: { dataSourceId_code: { dataSourceId: source.id, code: parsed.code } } });
+      if (existing && (existing.name !== parsed.name || existing.valueType !== parsed.valueType || (existing.unit ?? "") !== parsed.unit)) {
+        throw new MetricServiceError("METRIC_EXISTS", "该编码已用于其他指标，请核对名称、类型和单位", 409);
+      }
+      const definition = existing ?? await tx.metricDefinition.create({
+        data: {
+          dataSourceId: source.id, code: parsed.code, name: parsed.name, valueType: parsed.valueType,
+          unit: parsed.unit || null, writable: true, queryConfigJson: { adapter: "manual" }
+        }
+      });
+      const value = await tx.metricValue.create({
+        data: {
+          metricDefinitionId: definition.id, period: parsed.period, dimensionsHash: EMPTY_DIMENSIONS_HASH,
+          dimensionsJson: {}, valueText: parsed.value,
+          valueNumber: parsed.valueType === "NUMBER" ? parsed.value : null, version: 1
+        }
+      });
+      const history = await tx.metricValueHistory.create({
+        data: { metricValueId: value.id, oldValueJson: {}, newValueJson: { valueText: parsed.value }, reason: "手动录入", operatorId: actor.id, expectedVersion: 0 }
+      });
+      await tx.operationLog.create({ data: {
+        actorId: actor.id, action: existing ? "MANUAL_METRIC_VALUE_CREATED" : "MANUAL_METRIC_CREATED", resourceType: "MetricDefinition", resourceId: definition.id,
+        correlationId: randomUUID(), metadataJson: { period: parsed.period, code: parsed.code }
+      } });
+      return publicManualMetric({ ...value, history: [{ createdAt: history.createdAt, operator: actor }] }, { ...definition, dataSource: source }, parsed.period);
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new MetricServiceError("METRIC_EXISTS", "该指标月份已有值，或编码被同时创建；请刷新后重试", 409);
+    }
+    throw error;
+  }
+}
 
 async function reconcileMirror(definition: DefinitionWithSource, period: string, actorId: string) {
   const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
@@ -152,7 +236,13 @@ async function queryAllMetrics(period: string) {
     orderBy: [{ dataSource: { name: "asc" } }, { name: "asc" }]
   });
   const result = [];
+  const localValues = await manualValues(definitions, period);
   for (const definition of definitions) {
+    if (isManual(definition)) {
+      const value = localValues.get(definition.id);
+      if (value) result.push(publicManualMetric(value, definition, period));
+      continue;
+    }
     const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
     if (!mapping.success) continue;
     try {
@@ -175,6 +265,7 @@ async function availablePeriods(year: string) {
   });
   const groups = new Map<string, { source: DefinitionWithSource["dataSource"]; sourceCode: string; codes: Set<string> }>();
   for (const definition of definitions) {
+    if (isManual(definition)) continue;
     const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
     if (!mapping.success) continue;
     const key = `${definition.dataSourceId}:${mapping.data.sourceCode}`;
@@ -186,7 +277,11 @@ async function availablePeriods(year: string) {
     const results = await Promise.all([...groups.values()].map((group) => adapterFor(group.source).listAvailablePeriods({
       year, sourceCode: group.sourceCode, metricCodes: [...group.codes]
     })));
-    return [...new Set(results.flat())].filter((period) => periodSchema.safeParse(period).success && period.startsWith(`${year}-`)).sort();
+    const manualPeriods = await prisma.metricValue.findMany({
+      where: { metricDefinition: { dataSource: { type: "MANUAL", status: "ACTIVE" } }, period: { startsWith: `${year}-` } },
+      select: { period: true }, distinct: ["period"]
+    });
+    return [...new Set([...results.flat(), ...manualPeriods.map((value) => value.period)])].filter((period) => periodSchema.safeParse(period).success && period.startsWith(`${year}-`)).sort();
   } catch (error) {
     if (error instanceof MetricServiceError) throw error;
     throw new MetricServiceError("DATASOURCE_UNAVAILABLE", "指标数据源暂时不可用", 503);
@@ -248,6 +343,7 @@ export async function listMetricCatalog(input: { period: unknown; page: unknown;
 
   const groups = new Map<string, { source: DefinitionWithSource["dataSource"]; sourceCode: string; codes: Set<string> }>();
   for (const definition of definitions) {
+    if (isManual(definition)) continue;
     const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
     if (!mapping.success) continue;
     const key = JSON.stringify([definition.dataSourceId, mapping.data.sourceCode]);
@@ -267,9 +363,21 @@ export async function listMetricCatalog(input: { period: unknown; page: unknown;
     throw new MetricServiceError("DATASOURCE_UNAVAILABLE", "指标数据源暂时不可用", 503);
   }
 
+  const localValues = await manualValues(definitions, period);
+
   return {
     period, page, pageSize: CATALOG_PAGE_SIZE, total,
     items: definitions.map((definition) => {
+      if (isManual(definition)) {
+        const value = localValues.get(definition.id);
+        return {
+          definitionId: definition.id, code: definition.code, name: definition.name,
+          valueType: definition.valueType, unit: definition.unit,
+          dataSource: { id: definition.dataSource.id, name: definition.dataSource.name },
+          writable: definition.writable, manual: true,
+          metric: value ? publicManualMetric(value, definition, period) : null
+        };
+      }
       const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
       const key = mapping.success ? JSON.stringify([definition.dataSourceId, mapping.data.sourceCode]) : "";
       const record = recordsByGroup.get(key)?.get(definition.code);
@@ -277,8 +385,11 @@ export async function listMetricCatalog(input: { period: unknown; page: unknown;
         definitionId: definition.id,
         code: definition.code,
         name: definition.name,
+        valueType: definition.valueType,
+        unit: definition.unit,
         dataSource: { id: definition.dataSource.id, name: definition.dataSource.name },
         writable: definition.writable,
+        manual: false,
         metric: record ? publicMetric(record, definition) : null
       };
     })
@@ -288,6 +399,18 @@ export async function listMetricCatalog(input: { period: unknown; page: unknown;
 export async function readMetricSnapshot(definitionId: string, period: string) {
   const definition = await prisma.metricDefinition.findUnique({ where: { id: definitionId }, include: { dataSource: true } });
   if (!definition) throw new MetricServiceError("NOT_FOUND", "指标不存在", 404);
+  if (isManual(definition)) {
+    const value = await prisma.metricValue.findUnique({
+      where: { metricDefinitionId_period_dimensionsHash: { metricDefinitionId: definition.id, period, dimensionsHash: EMPTY_DIMENSIONS_HASH } },
+      include: { history: { orderBy: { createdAt: "desc" }, take: 1, include: { operator: { select: { username: true } } } } }
+    });
+    if (!value) throw new MetricServiceError("NOT_FOUND", "该月份暂无指标值", 404);
+    return {
+      dataSourceId: definition.dataSourceId, dataSourceName: definition.dataSource.name,
+      metricCode: definition.code, metricName: definition.name,
+      ...publicManualMetric(value, definition, period)
+    };
+  }
   const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
   if (!mapping.success) throw new MetricServiceError("UNSUPPORTED_MAPPING", "指标映射暂不支持", 409);
   let record;
@@ -313,6 +436,46 @@ export async function updateMetricValue(definitionId: string, input: unknown) {
   const definition = await prisma.metricDefinition.findUnique({ where: { id: definitionId }, include: { dataSource: true } });
   if (!definition) throw new MetricServiceError("NOT_FOUND", "指标不存在", 404);
   if (!definition.writable) throw new MetricServiceError("FORBIDDEN", "该指标不可修改", 403);
+  if (isManual(definition)) {
+    assertMetricValue(parsed.value, definition.valueType);
+    return prisma.$transaction(async (tx) => {
+      const key = { metricDefinitionId: definition.id, period: parsed.period, dimensionsHash: EMPTY_DIMENSIONS_HASH };
+      const current = await tx.metricValue.findUnique({ where: { metricDefinitionId_period_dimensionsHash: key } });
+      if ((current?.version ?? 0) !== parsed.expectedVersion) throw new MetricServiceError("VERSION_CONFLICT", "指标已被其他用户更新，请刷新后重试", 409);
+      let value;
+      if (current) {
+        const changed = await tx.metricValue.updateMany({
+          where: { id: current.id, version: current.version },
+          data: { valueText: parsed.value, valueNumber: definition.valueType === "NUMBER" ? parsed.value : null, version: { increment: 1 }, fetchedAt: new Date() }
+        });
+        if (changed.count !== 1) throw new MetricServiceError("VERSION_CONFLICT", "指标已被其他用户更新，请刷新后重试", 409);
+        value = await tx.metricValue.findUniqueOrThrow({ where: { id: current.id } });
+      } else {
+        try {
+          value = await tx.metricValue.create({ data: {
+            ...key, dimensionsJson: {}, valueText: parsed.value,
+            valueNumber: definition.valueType === "NUMBER" ? parsed.value : null, version: 1
+          } });
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new MetricServiceError("VERSION_CONFLICT", "指标已被其他用户录入，请刷新后重试", 409);
+          }
+          throw error;
+        }
+      }
+      const history = await tx.metricValueHistory.create({ data: {
+        metricValueId: value.id, oldValueJson: current ? { valueText: current.valueText } : {},
+        newValueJson: { valueText: parsed.value }, reason: parsed.reason,
+        operatorId: actor.id, expectedVersion: parsed.expectedVersion
+      } });
+      await tx.operationLog.create({ data: {
+        actorId: actor.id, action: current ? "MANUAL_METRIC_UPDATED" : "MANUAL_METRIC_VALUE_CREATED",
+        resourceType: "MetricDefinition", resourceId: definition.id, correlationId: randomUUID(),
+        metadataJson: { period: parsed.period, version: value.version }
+      } });
+      return publicManualMetric({ ...value, history: [{ createdAt: history.createdAt, operator: actor }] }, definition, parsed.period);
+    });
+  }
   const mapping = demoQueryConfigSchema.safeParse(definition.updateConfigJson);
   if (!mapping.success) throw new MetricServiceError("UNSUPPORTED_MAPPING", "指标不支持在线修改", 409);
   if (definition.valueType === "NUMBER" && !/^-?\d+(\.\d+)?$/.test(parsed.value)) {
@@ -351,6 +514,7 @@ export async function reconcileMetricValue(definitionId: string, periodInput: un
   const period = periodSchema.parse(periodInput);
   const definition = await prisma.metricDefinition.findUnique({ where: { id: definitionId }, include: { dataSource: true } });
   if (!definition) throw new MetricServiceError("NOT_FOUND", "指标不存在", 404);
+  if (isManual(definition)) throw new MetricServiceError("UNSUPPORTED_MAPPING", "手动录入指标无需同步", 409);
   try {
     return await reconcileMirror(definition, period, actor.id);
   } catch (error) {
@@ -364,6 +528,21 @@ export async function getMetricHistory(definitionId: string, periodInput: unknow
   const period = periodSchema.parse(periodInput);
   const definition = await prisma.metricDefinition.findUnique({ where: { id: definitionId }, include: { dataSource: true } });
   if (!definition) throw new MetricServiceError("NOT_FOUND", "指标不存在", 404);
+  if (isManual(definition)) {
+    const value = await prisma.metricValue.findUnique({ where: {
+      metricDefinitionId_period_dimensionsHash: { metricDefinitionId: definition.id, period, dimensionsHash: EMPTY_DIMENSIONS_HASH }
+    } });
+    if (!value) return { period, items: [] };
+    const history = await prisma.metricValueHistory.findMany({
+      where: { metricValueId: value.id }, orderBy: { createdAt: "desc" }, include: { operator: { select: { username: true } } }
+    });
+    return { period, items: history.map((entry) => ({
+      oldValueText: (entry.oldValueJson as { valueText?: string }).valueText ?? "",
+      newValueText: (entry.newValueJson as { valueText: string }).valueText,
+      oldVersion: entry.expectedVersion, newVersion: entry.expectedVersion + 1,
+      reason: entry.reason, updatedBy: entry.operator.username, updatedAt: entry.createdAt.toISOString()
+    })) };
+  }
   const mapping = demoQueryConfigSchema.safeParse(definition.queryConfigJson);
   if (!mapping.success) throw new MetricServiceError("UNSUPPORTED_MAPPING", "指标映射暂不支持", 409);
   try {

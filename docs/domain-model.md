@@ -65,6 +65,8 @@ P3 采用 `expectedVersion` 的目标分配集合替换；每个 `(taskId, templ
 - `MetricValue(id, metricDefinitionId, period, dimensionsHash, dimensionsJson, valueText, valueNumber?, sourceUpdatedAt?, version, fetchedAt)`；`(metricDefinitionId, period, dimensionsHash)` 唯一。
 - `MetricValueHistory(id, metricValueId, oldValueJson, newValueJson, reason, operatorId, expectedVersion, createdAt)`；索引 `(metricValueId, createdAt)`。
 
+平台手动指标使用 `DataSource.type=MANUAL` 的内置来源，定义和值继续复用上述三表；其 `MetricValue` 为平台权威记录，无外部源版本。新月份值和修改均写入历史。见 ADR-0022。
+
 若外部指标库是真实数据源，`MetricValue` 可作为受控缓存/镜像；Adapter 的更新与本地 history 写入需要清晰的失败状态，禁止伪装成跨库原子事务。
 
 ### 文件、AI 与审计

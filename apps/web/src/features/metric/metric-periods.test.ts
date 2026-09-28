@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findMany, requireCollector, listAvailablePeriods } = vi.hoisted(() => ({
-  findMany: vi.fn(), requireCollector: vi.fn(), listAvailablePeriods: vi.fn()
+const { findMany, findValues, requireCollector, listAvailablePeriods } = vi.hoisted(() => ({
+  findMany: vi.fn(), findValues: vi.fn(), requireCollector: vi.fn(), listAvailablePeriods: vi.fn()
 }));
 
-vi.mock("@report-platform/database", () => ({ prisma: { metricDefinition: { findMany } }, Prisma: {} }));
+vi.mock("@report-platform/database", () => ({ prisma: { metricDefinition: { findMany }, metricValue: { findMany: findValues } }, Prisma: {} }));
 vi.mock("@/features/auth/authorization", () => ({ requireCollector }));
 vi.mock("@/features/report-task/report-task-service", () => ({ getFillInstance: vi.fn() }));
 vi.mock("@/features/data-source/credential", () => ({ decryptPassword: () => "test-password" }));
@@ -20,7 +20,7 @@ const source = {
   databaseName: "metrics", username: "reader", encryptedPassword: "encrypted", encryptionKeyVersion: "v1"
 };
 
-beforeEach(() => { vi.clearAllMocks(); requireCollector.mockResolvedValue({ id: "collector-1" }); });
+beforeEach(() => { vi.clearAllMocks(); requireCollector.mockResolvedValue({ id: "collector-1" }); findValues.mockResolvedValue([]); });
 
 describe("available metric periods", () => {
   it("unions source months only for configured metric mappings", async () => {
@@ -39,5 +39,12 @@ describe("available metric periods", () => {
     expect(listAvailablePeriods).toHaveBeenCalledTimes(2);
     expect(listAvailablePeriods).toHaveBeenCalledWith({ year: "2026", sourceCode: "demo", metricCodes: ["revenue", "profit"] });
     expect(listAvailablePeriods).toHaveBeenCalledWith({ year: "2026", sourceCode: "staff", metricCodes: ["headcount"] });
+  });
+
+  it("includes months entered manually", async () => {
+    findMany.mockResolvedValue([]);
+    findValues.mockResolvedValue([{ period: "2026-02" }]);
+    await expect(availableMetricPeriodsForCollector("2026")).resolves.toEqual({ year: "2026", periods: ["2026-02"] });
+    expect(findValues).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ metricDefinition: { dataSource: { type: "MANUAL", status: "ACTIVE" } } }) }));
   });
 });

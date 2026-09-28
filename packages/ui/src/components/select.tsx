@@ -84,7 +84,7 @@ export function Select({ "aria-label": label, value, onValueChange, options, pla
       <span className={cn("truncate", !selected && "text-muted-foreground")}>{selected?.label ?? placeholder}</span>
       <span aria-hidden="true" className="shrink-0">▾</span>
     </button>
-    {open ? <div aria-label={label} className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full min-w-48 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md" id={listId} role="listbox">
+    {open ? <div aria-label={label} className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full min-w-48 overflow-y-auto rounded-md border bg-card p-1 text-card-foreground shadow-md" id={listId} role="listbox">
       {options.length ? options.map((option, index) => <div
         aria-disabled={option.disabled || undefined}
         aria-selected={option.value === value}

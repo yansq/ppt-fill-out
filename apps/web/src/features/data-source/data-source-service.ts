@@ -30,7 +30,7 @@ const publicFields = {
 
 export async function listDataSources() {
   await requireCollector();
-  return prisma.dataSource.findMany({ select: publicFields, orderBy: { createdAt: "desc" } });
+  return prisma.dataSource.findMany({ where: { type: { not: "MANUAL" } }, select: publicFields, orderBy: { createdAt: "desc" } });
 }
 
 export async function createDataSource(input: unknown) {
