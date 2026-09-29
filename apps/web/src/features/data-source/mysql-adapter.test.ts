@@ -56,6 +56,20 @@ describe("MySQL metric adapter", () => {
     expect(end).toHaveBeenCalledOnce();
   });
 
+  it("discovers one definition per source code and metric code", async () => {
+    execute.mockResolvedValueOnce([[{
+      data_source_code: "demo", metric_code: "new_metric", metric_name: "新增指标", value_type: "NUMBER", unit: "万元"
+    }]]);
+    const adapter = new MySqlMetricDataSource({
+      host: "metrics.internal", port: 3306, databaseName: "metrics", username: "reader", password: "secret"
+    });
+    await expect(adapter.listMetricDefinitions()).resolves.toEqual([{
+      dataSourceCode: "demo", metricCode: "new_metric", metricName: "新增指标", valueType: "NUMBER", unit: "万元"
+    }]);
+    expect(execute).toHaveBeenCalledWith(expect.stringContaining("GROUP BY data_source_code, metric_code"));
+    expect(end).toHaveBeenCalledOnce();
+  });
+
   it("lists only months with records for configured metrics", async () => {
     execute.mockResolvedValueOnce([[{ period: "2026-03" }, { period: "2026-09" }]]);
     const adapter = new MySqlMetricDataSource({

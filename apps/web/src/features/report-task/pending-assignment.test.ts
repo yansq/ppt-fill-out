@@ -67,4 +67,15 @@ describe("assigning an unregistered employee", () => {
     expect(userCreateMock).not.toHaveBeenCalled();
     expect(assignmentCreateMock).not.toHaveBeenCalled();
   });
+
+  it("starts collector filling when no page is assigned", async () => {
+    await replaceTaskAssignments("task-1", { expectedVersion: 0, assignments: [] });
+    expect(taskUpdateManyMock).toHaveBeenCalledWith({
+      where: { id: task.id, version: 0 }, data: { version: { increment: 1 }, status: "FILLING" }
+    });
+    expect(assignmentCreateMock).not.toHaveBeenCalled();
+    expect(logCreateMock).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: "TASK_ASSIGNMENTS_REPLACED", metadataJson: { added: 0, removed: 0, collectorOnly: true }
+    }) });
+  });
 });

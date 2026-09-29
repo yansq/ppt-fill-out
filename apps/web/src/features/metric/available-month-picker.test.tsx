@@ -8,6 +8,19 @@ import { AvailableMonthPicker } from "./available-month-picker";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("available month picker", () => {
+  it("refreshes available months without remounting the picker", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ periods: ["2026-09"] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ periods: ["2026-09", "2026-10"] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(<AvailableMonthPicker label="查看月份" onChange={vi.fn()} periodsUrl="/api/metrics/periods" refreshKey={0} value="2026-09" />);
+    fireEvent.click(screen.getByRole("button", { name: "查看月份" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "2026年10月" }).hasAttribute("disabled")).toBe(true));
+    rerender(<AvailableMonthPicker label="查看月份" onChange={vi.fn()} periodsUrl="/api/metrics/periods" refreshKey={1} value="2026-09" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "2026年10月" }).hasAttribute("disabled")).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("greys out months without metrics and only accepts a month with records", async () => {
     const onChange = vi.fn();
     const onAvailabilityChange = vi.fn();

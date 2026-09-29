@@ -172,6 +172,32 @@ export async function returnFillInstance(taskId: string, instanceId: string, inp
   return getReview(taskId);
 }
 
+export async function submitCollectorOnlyTask(taskId: string, input: unknown) {
+  const actor = await requireCollector();
+  const parsed = completeSchema.parse(input);
+  await prisma.$transaction(async (tx) => {
+    const task = await ownedTask(taskId, actor.id, tx);
+    if (task.version !== parsed.expectedVersion) conflict();
+    if (task.status !== "FILLING") invalid("任务当前不可提交收集人填写");
+    const instanceCount = await tx.fillInstance.count({ where: { taskId } });
+    if (instanceCount !== 0) invalid("有填报人分配的任务须等待填报人提交");
+    const required = await tx.templatePlaceholder.findMany({ where: { slide: { templateId: task.templateId } }, select: { id: true } });
+    if (!required.length) invalid("模板没有需要填写的内容");
+    const finalCount = await tx.finalValue.count({ where: { taskId, placeholderId: { in: required.map((value) => value.id) } } });
+    if (finalCount !== required.length) invalid("请先填写全部页面的最终值");
+    const changed = await tx.reportTask.updateMany({
+      where: { id: taskId, collectorId: actor.id, status: "FILLING", version: parsed.expectedVersion },
+      data: { status: "REVIEWING", version: { increment: 1 } }
+    });
+    if (changed.count !== 1) conflict();
+    await tx.operationLog.create({ data: {
+      actorId: actor.id, action: "COLLECTOR_FILL_SUBMITTED", resourceType: "ReportTask", resourceId: taskId,
+      taskId, correlationId: randomUUID(), metadataJson: { finalCount }
+    } });
+  });
+  return getReview(taskId);
+}
+
 export async function completeReview(taskId: string, input: unknown) {
   const actor = await requireCollector();
   const parsed = completeSchema.parse(input);
@@ -180,7 +206,7 @@ export async function completeReview(taskId: string, input: unknown) {
     if (task.version !== parsed.expectedVersion) conflict();
     if (task.status !== "REVIEWING") invalid("任务当前不可完成审核");
     const instances = await tx.fillInstance.findMany({ where: { taskId }, select: { status: true, templateSlideId: true } });
-    if (!instances.length || instances.some((instance) => instance.status !== "SUBMITTED" && instance.status !== "REVIEWED")) invalid("所有填报实例必须先提交");
+    if (instances.some((instance) => instance.status !== "SUBMITTED" && instance.status !== "REVIEWED")) invalid("所有填报实例必须先提交");
     const required = await tx.templatePlaceholder.findMany({ where: { slide: { templateId: task.templateId } }, select: { id: true } });
     const finalCount = await tx.finalValue.count({ where: { taskId, placeholderId: { in: required.map((value) => value.id) } } });
     if (finalCount !== required.length) invalid("模板还有占位符未确定最终值");

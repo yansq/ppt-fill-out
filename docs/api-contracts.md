@@ -64,6 +64,8 @@ Collector 可调用 `GET /api/metrics?period=YYYY-MM`、`PUT /api/metrics/{defin
 
 指标管理页使用独立的 `GET /api/metrics/catalog`：`period` 必填，`page` 从 1 开始，`search` 按已配置指标的名称、编码或数据源名称过滤，最多 100 字。每页固定 20 条，返回 `{ period, page, pageSize, total, items }`。`total` 是符合条件的启用数据源指标定义数；每项包含定义摘要和该月份的 `metric`，该月没有值时为 `null`。平台先分页定义，再按数据源分组读取本页源库值，避免一次查询全部指标。原 `GET /api/metrics` 供审核等页面继续使用。
 
+指标目录、可用月份与填报指标读取前，会从启用的 MySQL `metric_record` 源发现新编码并登记缺失定义；源库新行无需手工修改 `MetricDefinition`。自动登记指标默认只读。管理页在可见时每 15 秒刷新目录和月份；同一数据源下跨 `data_source_code` 的重复 `metric_code` 返回 `AMBIGUOUS_METRIC_CODE`（409）。
+
 手动录入：`POST /api/metrics/manual` 接收 `{ period, code, name, valueType: "NUMBER"|"STRING", value, unit? }`，返回 `201 { metric }`。编码仅允许字母、数字、下划线、连字符；同编码追加其他月份时，名称、值类型和单位必须一致，目标月份不能已有值。目录项增加 `manual`、`valueType`、`unit`；手动指标无值月份可用 `PUT /api/metrics/{definitionId}` 配合 `expectedVersion: 0` 和原因补录。`GET /api/metrics/periods` 包含手动值所在月份，填报和审核的指标读取接口也包含手动值。手动指标不执行源库对账。
 
 P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`，返回已移除占位符文字的 PNG；模板访问权限与常规预览相同，响应为私有缓存。`POST /api/metrics/{definitionId}/reconcile` 接收 `{ period }`，只允许 Collector；它按源库连续版本历史补齐平台镜像，响应包含 `appliedChanges`，版本缺口返回 `SYNC_HISTORY_GAP`，无新变更时幂等返回 0。
@@ -72,7 +74,9 @@ P4 补充 `GET /api/templates/{templateId}/slides/{slideIndex}/static-preview`�
 
 草稿预览改为 `GET /api/fill-instances/{id}/draft-preview?version={fillInstanceVersion}`，按实例权限读取已保存绑定值；版本不一致返回 409，他人实例返回 404。响应为 `image/png` 和 `private, no-store`，保存绑定后前端用新版本 URL 重新请求。
 
-P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId } | { slideId, employeeNumber }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。六位工号尚无账号时，确认保存会在同一事务中按需创建姓名为空、无凭据的 `FILLER` 用户。已注册用户与活跃 Collector 也可被分配，详见 ADR-0018、ADR-0019。同页多名填报人分别对应独立 FillInstance。无变化时保持版本。不可撤销已有填报痕迹的分配，详见 ADR-0005。
+P3 任务创建请求为 `{ name, templateId, reportPeriod }`。模板必须由当前 Collector 创建且状态为 `READY`；任务关联不可变模板版本，初始状态 `DRAFT`。分配请求为 `{ expectedVersion, assignments: [{ slideId, assigneeId } | { slideId, employeeNumber }] }`，表示目标全集，而非增量；成功返回任务详情和新的 `version`。六位工号尚无账号时，确认保存会在同一事务中按需创建姓名为空、无凭据的 `FILLER` 用户。已注册用户与活跃 Collector 也可被分配，详见 ADR-0018、ADR-0019。同页多名填报人分别对应独立 FillInstance。已开始任务的分配集合无变化时保持版本；空分配的草稿保存会启动自填任务。不可撤销已有填报痕迹的分配，详见 ADR-0005。
+
+未分配且有占位符的页面由任务 Collector 通过 FinalValue 填写。`DRAFT` 任务允许保存空分配集合以启动收集人自填，前提是模板至少有一个占位符；已进入 `FILLING` 的任务清空可撤销分配时保持 `FILLING`。完全无 FillInstance 的任务在所有模板占位符均已有 FinalValue 后，可调用 `POST /api/report-tasks/{id}/submit-collector`（`{ expectedVersion }`）进入 `REVIEWING`，再调用原审核接口完成审核。详见 ADR-0024。
 
 `POST /api/fill-instances/{id}/start` 请求为 `{ expectedVersion }`，只允许当前 assignee 将 `NOT_STARTED` 或 `RETURNED` 转为 `IN_PROGRESS`；重复或过期版本返回 409。Collector 任务详情包含总体和逐页的实例数、已开始数、已提交数与提交百分比。`GET /api/fill-instances/mine` 只返回当前具备填报权限用户被分配的实例；他人的实例 ID 返回 404。
 

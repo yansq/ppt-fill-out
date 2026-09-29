@@ -9,6 +9,8 @@ type AvailableMonthPickerProps = {
   onAvailabilityChange?: (available: boolean | null) => void;
   periodsUrl: string;
   disabled?: boolean;
+  refreshKey?: number;
+  inline?: boolean;
 };
 
 const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
@@ -18,7 +20,7 @@ function yearOf(period: string) {
   return year >= 1000 && year <= 9999 ? year : new Date().getFullYear();
 }
 
-export function AvailableMonthPicker({ label, value, onChange, onAvailabilityChange, periodsUrl, disabled = false }: AvailableMonthPickerProps) {
+export function AvailableMonthPicker({ label, value, onChange, onAvailabilityChange, periodsUrl, disabled = false, refreshKey = 0, inline = false }: AvailableMonthPickerProps) {
   const [year, setYear] = useState(() => yearOf(value));
   const [open, setOpen] = useState(false);
   const [periodsByYear, setPeriodsByYear] = useState<Record<number, string[]>>({});
@@ -26,25 +28,30 @@ export function AvailableMonthPicker({ label, value, onChange, onAvailabilityCha
   const [retry, setRetry] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const lastRequestKey = useRef("");
   const dialogId = useId();
 
   const fetchYear = open ? year : value ? yearOf(value) : year;
   const periods = periodsByYear[fetchYear];
   useEffect(() => {
+    const requestKey = `${periodsUrl}:${fetchYear}:${retry}:${refreshKey}`;
+    if (lastRequestKey.current === requestKey) return;
     const controller = new AbortController();
-    if (periods !== undefined) return;
     void (async () => {
       try {
-        const response = await fetch(`${periodsUrl}?year=${fetchYear}`, { signal: controller.signal });
+        const response = await fetch(`${periodsUrl}?year=${fetchYear}`, { signal: controller.signal, cache: "no-store" });
         const result = await response.json() as { periods?: string[]; error?: { message: string } };
         if (!response.ok) throw new Error(result.error?.message ?? "可用月份加载失败");
-        if (!controller.signal.aborted) setPeriodsByYear((previous) => ({ ...previous, [fetchYear]: (result.periods ?? []).filter((period) => /^\d{4}-(0[1-9]|1[0-2])$/.test(period) && period.startsWith(`${fetchYear}-`)) }));
+        if (!controller.signal.aborted) {
+          lastRequestKey.current = requestKey;
+          setPeriodsByYear((previous) => ({ ...previous, [fetchYear]: (result.periods ?? []).filter((period) => /^\d{4}-(0[1-9]|1[0-2])$/.test(period) && period.startsWith(`${fetchYear}-`)) }));
+        }
       } catch (cause) {
         if (!controller.signal.aborted) setError({ year: fetchYear, message: cause instanceof Error ? cause.message : "可用月份加载失败" });
       }
     })();
     return () => controller.abort();
-  }, [periodsUrl, fetchYear, retry, periods]);
+  }, [periodsUrl, fetchYear, retry, refreshKey]);
 
   const selectedYear = yearOf(value);
   const selectedPeriods = periodsByYear[selectedYear];
@@ -73,7 +80,7 @@ export function AvailableMonthPicker({ label, value, onChange, onAvailabilityCha
       <span>{value ? `${value.slice(0, 4)} 年 ${Number(value.slice(5))} 月${available === false ? "（无指标）" : ""}` : "选择月份"}</span><span aria-hidden="true">▾</span>
     </button>
     {error?.year === fetchYear && !open ? <p className="mt-1 text-xs text-primary" role="alert">可用月份加载失败，请打开后重试。</p> : null}
-    {open ? <div aria-label={`${label}选择`} className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border bg-card p-4 shadow-xl" id={dialogId} role="dialog">
+    {open ? <div aria-label={`${label}选择`} className={`${inline ? "relative w-72 max-w-full" : "absolute left-0 top-full z-30 w-72"} mt-2 rounded-xl border bg-card p-4 shadow-xl`} id={dialogId} role="dialog">
       <div className="mb-4 flex items-center justify-between gap-3">
         <button aria-label="上一年" className="rounded-md border px-2 py-1 text-sm" disabled={year <= 1000} onClick={() => { setError(null); setYear(year - 1); }} type="button">‹</button>
         <strong>{year} 年</strong>

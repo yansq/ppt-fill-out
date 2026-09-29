@@ -211,8 +211,8 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
       if (task.status !== "DRAFT" && task.status !== "FILLING") {
         throw new ReportTaskError("INVALID_STATE_TRANSITION", "当前任务状态不可修改分配", 409);
       }
-      if (task.status === "FILLING" && parsed.assignments.length === 0) {
-        throw new ReportTaskError("INVALID_STATE_TRANSITION", "进行中的任务至少保留一条分配", 409);
+      if (task.status === "DRAFT" && parsed.assignments.length === 0 && !task.template.slides.some((slide) => slide._count.placeholders > 0)) {
+        throw new ReportTaskError("VALIDATION_ERROR", "模板没有需要填写的内容", 400);
       }
       const slideIds = new Set(task.template.slides.map((slide) => slide.id));
       if (parsed.assignments.some((assignment) => !slideIds.has(assignment.slideId))) {
@@ -282,7 +282,7 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
         throw new ReportTaskError("VALIDATION_ERROR", "填报人不存在、被停用或没有填报权限", 400);
       }
 
-      if (removals.length === 0 && additions.length === 0) return;
+      if (removals.length === 0 && additions.length === 0 && task.status !== "DRAFT") return;
 
       for (const [, assignment] of removals) {
         const instance = assignment.fillInstance;
@@ -294,7 +294,7 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
 
       const updated = await tx.reportTask.updateMany({
         where: { id: task.id, version: parsed.expectedVersion },
-        data: { version: { increment: 1 }, status: parsed.assignments.length ? "FILLING" : "DRAFT" }
+        data: { version: { increment: 1 }, status: "FILLING" }
       });
       if (updated.count !== 1) conflict("任务已被其他用户更新，请刷新后重试");
 
@@ -327,7 +327,7 @@ export async function replaceTaskAssignments(taskId: string, input: unknown) {
           resourceId: task.id,
           taskId: task.id,
           correlationId: randomUUID(),
-          metadataJson: { added: additions.length, removed: removals.length }
+          metadataJson: { added: additions.length, removed: removals.length, collectorOnly: parsed.assignments.length === 0 }
         }
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

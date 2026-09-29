@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -9,6 +10,7 @@ import { instanceStatusText, taskStatusText } from "../../components/status";
 import { PptPreviewImage } from "../fill-in/ppt-preview-image";
 import { AvailableMonthPicker } from "../metric/available-month-picker";
 import { MetricSelector } from "./metric-selector";
+import { PageNavigationLayout } from "./page-navigation-layout";
 import { PreviewEditorLayout } from "./preview-editor-layout";
 
 import type { getReview } from "./review-service";
@@ -39,7 +41,7 @@ function slideStatus(slide: Review["slides"][number], isFilling = false) {
     return "已退回";
   if (slide.placeholders.every((placeholder) => placeholder.finalValue))
     return isFilling ? "收集人已填" : "审核完成";
-  if (slide.instances.length === 0) return "待分配";
+  if (slide.instances.length === 0) return "收集人待填";
   if (
     slide.instances.every(
       (instance) =>
@@ -96,6 +98,8 @@ export function ReviewPanel({ initial }: { initial: Review }) {
       setMessage(
         result.task.status === "COMPLETED"
           ? "审核已完成，请进入生成与导出页面。"
+          : result.task.status === "REVIEWING" && review.task.status === "FILLING"
+            ? "收集人填写已提交，请完成审核。"
           : "已保存当前页的最终值",
       );
       router.refresh();
@@ -149,6 +153,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
   const canReview = review.task.status === "REVIEWING";
   const isFilling = review.task.status === "FILLING";
   const canSetValue = canReview || isFilling;
+  const collectorOnly = review.slides.every((slide) => slide.instances.length === 0);
   const requiredCount = review.slides.reduce(
     (count, slide) => count + slide.placeholders.length,
     0,
@@ -170,50 +175,154 @@ export function ReviewPanel({ initial }: { initial: Review }) {
       (placeholder) => !placeholder.finalValue,
     ) ??
     selectedSlide?.placeholders[0];
+  const selectedPlaceholderNumber =
+    selectedSlide && selectedPlaceholder
+      ? selectedSlide.placeholders.findIndex(
+          (placeholder) => placeholder.id === selectedPlaceholder.id,
+        ) + 1
+      : 0;
+  const fieldNavigation = selectedSlide?.placeholders.length ? (
+    <section aria-label="本页填报项" className="review-field-nav-panel">
+      <div className="review-field-list-heading">
+        <strong>选择填报项</strong>
+        <span>
+          共 {selectedSlide.placeholders.length} 项 · 当前{" "}
+          {selectedPlaceholderNumber}/{selectedSlide.placeholders.length}
+        </span>
+      </div>
+      <div aria-label="本页填报项" className="review-field-list" role="group">
+        {selectedSlide.placeholders.map((placeholder, index) => (
+          <button
+            aria-label={`查看填报项 ${placeholder.key} 第 ${placeholder.occurrenceIndex + 1} 处`}
+            aria-pressed={placeholder.id === selectedPlaceholder?.id}
+            className="review-field-tab"
+            data-complete={Boolean(placeholder.finalValue)}
+            key={placeholder.id}
+            onClick={() => {
+              setSelectedPlaceholderId(placeholder.id);
+              setSourceMode("manual");
+            }}
+            type="button"
+          >
+            <span className="review-field-index">{index + 1}</span>
+            <span className="review-field-name">
+              <strong>
+                {`{{${placeholder.key}}}`} #{placeholder.occurrenceIndex + 1}
+              </strong>
+              <small>
+                {placeholder.finalValue
+                  ? "已有最终值"
+                  : statusNames[placeholder.status]}
+              </small>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  ) : null;
+  const fillRecords = selectedSlide?.instances.length ? (
+    <details className="review-records">
+      <summary>
+        填报记录 <span>{selectedSlide.instances.length} 人</span>
+      </summary>
+      <div className="review-records-list">
+        {selectedSlide.instances.map((instance) => (
+          <div className="review-record" key={instance.id}>
+            <p>
+              {employeeDisplayName(instance.assignee)}（
+              {instance.assignee.employeeNumber}） ·{" "}
+              {instanceStatusText[instance.status]}
+            </p>
+            {instance.status === "SUBMITTED" && canReview ? (
+              <div className="review-return">
+                <input
+                  aria-label={`退回 ${employeeDisplayName(instance.assignee)} 的原因`}
+                  className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2"
+                  onChange={(event) =>
+                    setReasons({
+                      ...reasons,
+                      [instance.id]: event.target.value,
+                    })
+                  }
+                  placeholder="退回原因"
+                  value={reasons[instance.id] ?? ""}
+                />
+                <Button
+                  disabled={busy || !reasons[instance.id]?.trim()}
+                  onClick={() =>
+                    mutate(
+                      `/api/report-tasks/${review.task.id}/fill-instances/${instance.id}/return`,
+                      "POST",
+                      { reason: reasons[instance.id] },
+                    )
+                  }
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  退回
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </details>
+  ) : null;
 
   return (
-    <section>
-      <div className="review-overview">
-        <p>
-          {isFilling
-            ? `收集人已填 ${decidedCount}/${requiredCount} 项`
-            : `已确认 ${decidedCount}/${requiredCount} 项 · ${taskStatusText[review.task.status]}`}
-        </p>
-        <div className="review-overview-actions">
-          {canReview ? (
-            <Button
-              disabled={
-                busy || requiredCount === 0 || decidedCount !== requiredCount
-              }
-              onClick={() =>
-                mutate(`/api/report-tasks/${review.task.id}/review`, "POST", {})
-              }
-              type="button"
-            >
-              完成审核
-            </Button>
-          ) : review.task.status === "COMPLETED" ||
-            review.task.status === "EXPORTED" ? (
-            <span className="status-pill">审核已完成</span>
-          ) : null}
-          {review.task.status === "COMPLETED" ||
-          review.task.status === "EXPORTED" ? (
-            <Button asChild>
-              <a href={`/report-tasks/${review.task.id}/generation`}>
-                生成与导出
-              </a>
-            </Button>
-          ) : null}
+    <section className="review-panel">
+      {isFilling && collectorOnly ? (
+        <div className="review-overview">
+          <p>{`收集人自填 · 已填写 ${decidedCount}/${requiredCount} 项`}</p>
+          <Button
+            disabled={busy || requiredCount === 0 || decidedCount !== requiredCount}
+            onClick={() => mutate(`/api/report-tasks/${review.task.id}/submit-collector`, "POST", {})}
+            type="button"
+          >
+            提交收集人填写
+          </Button>
         </div>
-      </div>
+      ) : null}
+      {!isFilling ? (
+        <div className="review-overview">
+          <p>{`已确认 ${decidedCount}/${requiredCount} 项 · ${taskStatusText[review.task.status]}`}</p>
+          <div className="review-overview-actions">
+            {canReview ? (
+              <Button
+                disabled={
+                  busy || requiredCount === 0 || decidedCount !== requiredCount
+                }
+                onClick={() =>
+                  mutate(
+                    `/api/report-tasks/${review.task.id}/review`,
+                    "POST",
+                    {},
+                  )
+                }
+                type="button"
+              >
+                完成审核
+              </Button>
+            ) : review.task.status === "COMPLETED" ||
+              review.task.status === "EXPORTED" ? (
+              <span className="status-pill">审核已完成</span>
+            ) : null}
+            {review.task.status === "COMPLETED" ||
+            review.task.status === "EXPORTED" ? (
+              <Button asChild>
+                <a href={`/report-tasks/${review.task.id}/generation`}>
+                  生成与导出
+                </a>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {!selectedSlide ? (
         <p className="rounded-xl border bg-card p-5 text-sm">模板暂无页面。</p>
       ) : (
-        <div
-          aria-label={isFilling ? "填报工作区" : "审核工作区"}
-          className="review-workspace"
-          role="group"
-        >
+        <PageNavigationLayout label={isFilling ? "填报工作区" : "审核工作区"}>
           <nav
             aria-label={isFilling ? "填报页面导航" : "审核页面导航"}
             className="review-page-nav"
@@ -225,7 +334,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
             <div className="review-page-nav-list">
               {review.slides.map((slide) => {
                 const active = slide.id === selectedSlide.id;
-                const complete = isFilling
+                const complete = isFilling && slide.instances.length > 0
                   ? slide.instances.filter(
                       (instance) =>
                         instance.status === "SUBMITTED" ||
@@ -234,7 +343,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                   : slide.placeholders.filter(
                       (placeholder) => placeholder.finalValue,
                     ).length;
-                const total = isFilling
+                const total = isFilling && slide.instances.length > 0
                   ? slide.instances.length
                   : slide.placeholders.length;
                 return (
@@ -251,15 +360,31 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                     }}
                     type="button"
                   >
-                    <span className="review-page-nav-number">
-                      {slide.slideIndex + 1}
-                    </span>
-                    <span className="review-page-nav-copy">
+                    {slide.previewUrl ? (
+                      <span className="review-page-nav-thumb">
+                        <Image
+                          alt=""
+                          className="h-full w-full object-contain"
+                          height={81}
+                          loading="lazy"
+                          src={slide.previewUrl}
+                          unoptimized
+                          width={144}
+                        />
+                      </span>
+                    ) : (
+                      <span className="review-page-nav-thumb review-page-nav-thumb-empty">
+                        暂无预览
+                      </span>
+                    )}
+                    <span className="review-page-nav-meta">
                       <strong>第 {slide.slideIndex + 1} 页</strong>
-                      <small>{slideStatus(slide, isFilling)}</small>
+                      <span className="review-page-nav-count">
+                        {complete}/{total}
+                      </span>
                     </span>
-                    <span className="review-page-nav-count">
-                      {complete}/{total}
+                    <span className="review-page-nav-status">
+                      {slideStatus(slide, isFilling)}
                     </span>
                   </button>
                 );
@@ -275,7 +400,6 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                 <div className="review-panel-heading">
                   <div>
                     <h3>第 {selectedSlide.slideIndex + 1} 页预览</h3>
-                    <p>拖动右侧分隔条调整预览宽度</p>
                   </div>
                 </div>
                 {selectedSlide.previewUrl ? (
@@ -304,9 +428,9 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                       {isFilling ? "填报情况" : "审核"}
                     </h3>
                     <p>
-                      {isFilling
+                      {isFilling && selectedSlide.instances.length > 0
                         ? `已提交 ${selectedSlide.instances.filter((instance) => instance.status === "SUBMITTED" || instance.status === "REVIEWED").length}/${selectedSlide.instances.length} 人`
-                        : `已确认 ${selectedSlide.placeholders.filter((placeholder) => placeholder.finalValue).length}/${selectedSlide.placeholders.length} 项`}
+                        : `已填写 ${selectedSlide.placeholders.filter((placeholder) => placeholder.finalValue).length}/${selectedSlide.placeholders.length} 项`}
                     </p>
                   </div>
                   <span className="status-pill">
@@ -319,97 +443,11 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                   </p>
                 ) : (
                   <>
+                    {fieldNavigation}
                     {selectedSlide.instances.length === 0 ? (
-                      <p className="review-empty-note">本页尚未分配填报人。</p>
+                      <p className="review-empty-note">本页由收集人填写，无需分配填报人。</p>
                     ) : null}
-                    {selectedSlide.instances.length > 0 ? (
-                      <details className="review-records">
-                        <summary>
-                          填报记录{" "}
-                          <span>{selectedSlide.instances.length} 人</span>
-                        </summary>
-                        <div className="review-records-list">
-                          {selectedSlide.instances.map((instance) => (
-                            <div className="review-record" key={instance.id}>
-                              <p>
-                                {employeeDisplayName(instance.assignee)}（
-                                {instance.assignee.employeeNumber}） ·{" "}
-                                {instanceStatusText[instance.status]}
-                              </p>
-                              {instance.status === "SUBMITTED" && canReview ? (
-                                <div className="review-return">
-                                  <input
-                                    aria-label={`退回 ${employeeDisplayName(instance.assignee)} 的原因`}
-                                    className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2"
-                                    onChange={(event) =>
-                                      setReasons({
-                                        ...reasons,
-                                        [instance.id]: event.target.value,
-                                      })
-                                    }
-                                    placeholder="退回原因"
-                                    value={reasons[instance.id] ?? ""}
-                                  />
-                                  <Button
-                                    disabled={
-                                      busy || !reasons[instance.id]?.trim()
-                                    }
-                                    onClick={() =>
-                                      mutate(
-                                        `/api/report-tasks/${review.task.id}/fill-instances/${instance.id}/return`,
-                                        "POST",
-                                        { reason: reasons[instance.id] },
-                                      )
-                                    }
-                                    size="sm"
-                                    type="button"
-                                    variant="outline"
-                                  >
-                                    退回
-                                  </Button>
-                                </div>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
-                    <div
-                      className="review-field-list"
-                      role="group"
-                      aria-label="本页填报项"
-                    >
-                      {selectedSlide.placeholders.map((placeholder, index) => (
-                        <button
-                          aria-label={`查看填报项 ${placeholder.key} 第 ${placeholder.occurrenceIndex + 1} 处`}
-                          aria-pressed={
-                            placeholder.id === selectedPlaceholder?.id
-                          }
-                          className="review-field-tab"
-                          key={placeholder.id}
-                          onClick={() => {
-                            setSelectedPlaceholderId(placeholder.id);
-                            setSourceMode("manual");
-                          }}
-                          type="button"
-                        >
-                          <span className="review-field-index">
-                            {index + 1}
-                          </span>
-                          <span className="review-field-name">
-                            <strong>
-                              {`{{${placeholder.key}}}`} #
-                              {placeholder.occurrenceIndex + 1}
-                            </strong>
-                            <small>
-                              {placeholder.finalValue
-                                ? "已有最终值"
-                                : statusNames[placeholder.status]}
-                            </small>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                    {!isFilling ? fillRecords : null}
                     {selectedPlaceholder ? (
                       <div
                         className="review-field-detail"
@@ -578,6 +616,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                             {sourceMode === "metric" ? (
                               <div className="review-source-content">
                                 <AvailableMonthPicker
+                                  inline
                                   label="指标月份"
                                   onChange={setMetricPeriod}
                                   periodsUrl="/api/metrics/periods"
@@ -644,6 +683,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
                         ) : null}
                       </div>
                     ) : null}
+                    {isFilling ? fillRecords : null}
                   </>
                 )}
                 {message ? (
@@ -654,7 +694,7 @@ export function ReviewPanel({ initial }: { initial: Review }) {
               </section>
             }
           />
-        </div>
+        </PageNavigationLayout>
       )}
     </section>
   );

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findMany, findValues, requireCollector, listAvailablePeriods } = vi.hoisted(() => ({
-  findMany: vi.fn(), findValues: vi.fn(), requireCollector: vi.fn(), listAvailablePeriods: vi.fn()
+const { findMany, findValues, findSources, requireCollector, listAvailablePeriods } = vi.hoisted(() => ({
+  findMany: vi.fn(), findValues: vi.fn(), findSources: vi.fn(), requireCollector: vi.fn(), listAvailablePeriods: vi.fn()
 }));
 
-vi.mock("@report-platform/database", () => ({ prisma: { metricDefinition: { findMany }, metricValue: { findMany: findValues } }, Prisma: {} }));
+vi.mock("@report-platform/database", () => ({ prisma: { dataSource: { findMany: findSources }, metricDefinition: { findMany }, metricValue: { findMany: findValues } }, Prisma: {} }));
 vi.mock("@/features/auth/authorization", () => ({ requireCollector }));
 vi.mock("@/features/report-task/report-task-service", () => ({ getFillInstance: vi.fn() }));
 vi.mock("@/features/data-source/credential", () => ({ decryptPassword: () => "test-password" }));
@@ -20,7 +20,7 @@ const source = {
   databaseName: "metrics", username: "reader", encryptedPassword: "encrypted", encryptionKeyVersion: "v1"
 };
 
-beforeEach(() => { vi.clearAllMocks(); requireCollector.mockResolvedValue({ id: "collector-1" }); findValues.mockResolvedValue([]); });
+beforeEach(() => { vi.clearAllMocks(); requireCollector.mockResolvedValue({ id: "collector-1" }); findSources.mockResolvedValue([]); findValues.mockResolvedValue([]); });
 
 describe("available metric periods", () => {
   it("unions source months only for configured metric mappings", async () => {

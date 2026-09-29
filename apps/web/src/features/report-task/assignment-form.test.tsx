@@ -19,6 +19,16 @@ const slides = [
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("page assignment", () => {
+  it("lets the collector start filling without choosing a person", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AssignmentForm fillers={fillers} slides={slides} taskId="task" version={3} />);
+    expect(screen.getByText("未分配填报人时，由收集人填写本页。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "开始收集人填写" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ expectedVersion: 3, assignments: [] });
+  });
+
   it("shows slide previews, searches people and never assigns an empty slide", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);

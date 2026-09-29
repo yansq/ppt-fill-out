@@ -10,6 +10,7 @@ export interface MySqlConnectionConfig {
 
 export interface MetricDataSource {
   testConnection(): Promise<{ ok: boolean; latencyMs: number }>;
+  listMetricDefinitions(): Promise<Pick<MetricRecord, "dataSourceCode" | "metricCode" | "metricName" | "valueType" | "unit">[]>;
   listAvailablePeriods(params: { year: string; sourceCode: string; metricCodes: string[] }): Promise<string[]>;
   queryMetrics(params: { period: string; sourceCode: string; metricCodes?: string[]; search?: string }): Promise<MetricRecord[]>;
   updateMetric(params: { period: string; sourceCode: string; metricCode: string; value: string; expectedVersion: number; reason: string; actor: string }): Promise<MetricRecord & { previousValueText: string }>;
@@ -108,6 +109,24 @@ export class MySqlMetricDataSource implements MetricDataSource {
     try {
       await connection.query("SELECT 1");
       return { ok: true, latencyMs: Math.round(performance.now() - started) };
+    } finally {
+      await connection.end();
+    }
+  }
+
+  async listMetricDefinitions() {
+    const connection = await this.connect();
+    try {
+      const [rows] = await connection.execute<RecordRow[]>(
+        `SELECT r.data_source_code, r.metric_code, r.metric_name, r.value_type, r.unit
+         FROM metric_record r
+         JOIN (SELECT data_source_code, metric_code, MAX(id) AS id FROM metric_record GROUP BY data_source_code, metric_code) latest ON latest.id = r.id
+         ORDER BY r.data_source_code, r.metric_code`
+      );
+      return rows.map((row) => ({
+        dataSourceCode: row.data_source_code, metricCode: row.metric_code,
+        metricName: row.metric_name, valueType: row.value_type, unit: row.unit
+      }));
     } finally {
       await connection.end();
     }

@@ -64,7 +64,7 @@ function SlideAssignment({ slide, fillers, selected, pending, onToggle }: {
               <span className="truncate">{fillerLabel(filler)}{filler.status !== "ACTIVE" ? " · 已停用" : ""}</span>
               <button aria-label={`移除第 ${pageNumber} 页的 ${fillerLabel(filler)}`} className="rounded-full px-2 py-0.5 text-base hover:bg-background" disabled={pending} onClick={() => onToggle(key)} type="button">×</button>
             </span>)}
-          </div> : <p className="mb-4 text-sm muted">尚未选择填报人</p>}
+          </div> : <p className="mb-4 text-sm muted">未分配填报人时，由收集人填写本页。</p>}
           <Button aria-expanded={pickerOpen} aria-label={`选择第 ${pageNumber} 页填报人`} disabled={pending} onClick={() => setPickerOpen((open) => !open)} type="button" variant="outline">{pickerOpen ? "收起人员列表" : "搜索并选择填报人"}</Button>
           {pickerOpen ? <div className="mt-3 rounded-lg border bg-background p-3">
             <label className="grid gap-2 text-sm font-medium">搜索姓名或输入六位工号
@@ -143,7 +143,7 @@ export function AssignmentForm({ taskId, version, slides, fillers }: {
   const assignableCount = slides.filter((slide) => slide.placeholderCount > 0).length;
   const selectedSlide = slides.find((slide) => slide.id === selectedSlideId) ?? slides[0];
   return <div className="space-y-5">
-    <p className="text-sm muted">共 {slides.length} 页，其中 {assignableCount} 页需要填报。可按页搜索并选择一位或多位填报人。</p>
+    <p className="text-sm muted">共 {slides.length} 页，其中 {assignableCount} 页需要填报。可按页分配填报人；未分配的页面由收集人填写。</p>
     {fillers.length === 0 && assignableCount > 0 ? <p className="text-sm">暂无已注册填报人，可输入六位工号添加未注册员工。</p> : null}
     {selectedSlide ? <div className="task-assignment-layout">
       <nav aria-label="分配页面导航" className="task-assignment-nav rounded-lg border bg-card p-3">
@@ -160,7 +160,7 @@ export function AssignmentForm({ taskId, version, slides, fillers }: {
       <SlideAssignment fillers={fillers} key={selectedSlide.id} onToggle={toggle} pending={pending} selected={selected} slide={selectedSlide} />
     </div> : <p className="rounded-lg border bg-card p-5 text-sm muted">模板暂无页面。</p>}
     <div className="flex flex-wrap items-center gap-4">
-      <Button disabled={pending} onClick={save} type="button">{pending ? "保存中…" : "保存页面分配"}</Button>
+      <Button disabled={pending} onClick={save} type="button">{pending ? "保存中…" : selected.size === 0 ? "开始收集人填写" : "保存页面分配"}</Button>
       {message ? <span className="text-sm" role="status">{message}</span> : null}
     </div>
     <p className="text-xs muted">未注册员工将在保存分配时创建姓名为空的账号；已有填报痕迹的分配不能撤销。若其他人同时修改了任务，请刷新后重试。</p>

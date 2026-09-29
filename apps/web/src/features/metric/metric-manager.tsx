@@ -46,6 +46,13 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
   const current = result?.key === queryKey ? result : null;
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") setRetry((previous) => previous + 1);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (searchInput.trim() === search) return;
     const timer = window.setTimeout(() => {
       setSearch(searchInput.trim());
@@ -57,12 +64,12 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
   }, [searchInput, search]);
 
   useEffect(() => {
-    if (periodAvailable !== true || current) return;
+    if (periodAvailable !== true) return;
     const controller = new AbortController();
     void (async () => {
       try {
         const params = new URLSearchParams({ period, page: String(page), search });
-        const response = await fetch(`/api/metrics/catalog?${params}`, { signal: controller.signal });
+        const response = await fetch(`/api/metrics/catalog?${params}`, { signal: controller.signal, cache: "no-store" });
         const payload = await response.json() as CatalogResult & { error?: { message: string } };
         if (!response.ok) throw new Error(payload.error?.message ?? "加载指标失败");
         if (controller.signal.aborted) return;
@@ -72,7 +79,7 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
       }
     })();
     return () => controller.abort();
-  }, [period, periodAvailable, search, page, queryKey, current, retry]);
+  }, [period, periodAvailable, search, page, queryKey, retry]);
 
   function replace(updated: Metric) {
     setResult((previous) => previous ? { ...previous, items: previous.items.map((item) => item.definitionId === updated.definitionId ? { ...item, metric: updated } : item) } : previous);
@@ -92,7 +99,7 @@ export function MetricManager({ initialPeriod }: { initialPeriod: string }) {
   return <div className="space-y-6">
     <ManualMetricForm initialPeriod={period} onCreated={refreshManualMetric} />
     <div className="flex flex-wrap items-end gap-3">
-      <AvailableMonthPicker key={monthPickerKey} label="指标月份" onAvailabilityChange={setPeriodAvailable} onChange={(next) => { setPeriodAvailable(null); setMessage(""); setPeriod(next); setPage(1); setResult(null); setExpandedId(null); }} periodsUrl="/api/metrics/periods" value={period} />
+      <AvailableMonthPicker key={monthPickerKey} label="指标月份" onAvailabilityChange={setPeriodAvailable} onChange={(next) => { setPeriodAvailable(null); setMessage(""); setPeriod(next); setPage(1); setResult(null); setExpandedId(null); }} periodsUrl="/api/metrics/periods" refreshKey={retry} value={period} />
       <label className="grid min-w-56 gap-2 text-sm">搜索指标<input aria-label="搜索指标" className="h-10 rounded-md border bg-background px-3" maxLength={100} onChange={(event) => setSearchInput(event.target.value)} placeholder="名称、编码或数据源" type="search" value={searchInput} /></label>
       <span className="text-sm">{current ? `共 ${current.total} 个指标` : periodAvailable === null ? "正在确认可用月份…" : periodAvailable === false ? "该月份暂无可用指标" : message ? "指标加载失败" : "正在加载指标…"}</span>
       {message ? <Button onClick={() => { setMessage(""); setRetry((previous) => previous + 1); }} type="button" variant="outline">重试</Button> : null}

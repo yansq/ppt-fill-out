@@ -65,6 +65,29 @@ afterEach(() => {
 });
 
 describe("review page layout", () => {
+  it("submits unassigned pages filled by the collector for review", async () => {
+    const filling = {
+      ...initial,
+      task: { ...initial.task, status: "FILLING" },
+      slides: initial.slides.map((slide) => ({
+        ...slide,
+        placeholders: slide.placeholders.map((placeholder) => ({
+          ...placeholder, finalValue: { valueText: "已填写", resolutionType: "MANUAL" }
+        }))
+      }))
+    } as ComponentProps<typeof ReviewPanel>["initial"];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ ...filling, task: { ...filling.task, status: "REVIEWING", version: 4 } })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReviewPanel initial={filling} />);
+    expect(screen.getByText("本页由收集人填写，无需分配填报人。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "提交收集人填写" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/report-tasks/task-1/submit-collector");
+    expect(screen.getByRole("button", { name: "完成审核" })).toBeTruthy();
+  });
+
   it("lets the collector save manual and metric values while the task is filling", async () => {
     const filling = {
       ...initial,
@@ -278,6 +301,20 @@ describe("review page layout", () => {
     expect(
       screen.getByRole("heading", { name: "第 1 页填报情况" }),
     ).toBeTruthy();
+    const editorPanel = screen
+      .getByRole("heading", { name: "第 1 页填报情况" })
+      .closest(".review-editor-panel")!;
+    const itemSelector = editorPanel.querySelector(".review-field-nav-panel")!;
+    const valueEditor = editorPanel.querySelector(".review-value-editor")!;
+    const records = editorPanel.querySelector(".review-records")!;
+    expect(
+      itemSelector.compareDocumentPosition(valueEditor) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      valueEditor.compareDocumentPosition(records) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       screen.getByRole("navigation", { name: "填报页面导航" }).textContent,
     ).not.toContain("小王");
@@ -299,6 +336,12 @@ describe("review page layout", () => {
     expect(
       screen.getByRole("navigation", { name: "审核页面导航" }),
     ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "审核第 1 页" })
+        .querySelector("img")
+        ?.getAttribute("src"),
+    ).toContain("/preview/1");
     expect(
       screen.getByRole("img", { name: "第 1 页 PPT 预览" }).getAttribute("src"),
     ).toContain("/preview/1");
@@ -353,6 +396,50 @@ describe("review page layout", () => {
     ).toBeTruthy();
     expect(
       screen.queryByRole("textbox", { name: "手工最终值 first" }),
+    ).toBeNull();
+  });
+
+  it("shows ten fill items in the index and edits the selected item only", () => {
+    const filling = {
+      ...initial,
+      task: { ...initial.task, status: "FILLING" },
+      slides: [
+        {
+          ...initial.slides[0],
+          placeholders: Array.from({ length: 10 }, (_, index) => ({
+            id: `placeholder-${index}`,
+            key: `metric_${index + 1}`,
+            occurrenceIndex: 0,
+            status: "MISSING",
+            submissions: [],
+            finalValue: null,
+          })),
+        },
+      ],
+    } as ComponentProps<typeof ReviewPanel>["initial"];
+    render(<ReviewPanel initial={filling} />);
+
+    expect(
+      screen.getAllByRole("button", { name: /^查看填报项 metric_/ }),
+    ).toHaveLength(10);
+    expect(
+      screen
+        .getByRole("group", { name: "本页填报项" })
+        .closest(".review-editor-panel"),
+    ).toBeTruthy();
+    expect(
+      document.querySelector(".review-preview-panel .review-field-list"),
+    ).toBeNull();
+    expect(screen.getByText("共 10 项 · 当前 1/10")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "查看填报项 metric_10 第 1 处" }),
+    );
+    expect(screen.getByText("共 10 项 · 当前 10/10")).toBeTruthy();
+    expect(
+      screen.getByRole("textbox", { name: "手工最终值 metric_10" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("textbox", { name: "手工最终值 metric_1" }),
     ).toBeNull();
   });
 

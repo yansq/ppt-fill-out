@@ -19,7 +19,7 @@ export function FillingTaskWorkspace({
   const [view, setView] = useState<"progress" | "assignments">("progress");
 
   return (
-    <section aria-label="填报任务工作区">
+    <section aria-label="填报任务工作区" className="task-filling-workspace">
       <div aria-label="任务视图" className="task-view-switch" role="group">
         <button
           aria-controls="task-progress-panel"

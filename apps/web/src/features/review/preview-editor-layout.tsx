@@ -10,6 +10,7 @@ import type {
 } from "react";
 
 const DEFAULT_PREVIEW_PERCENT = 64;
+const RESIZE_HANDLE_WIDTH = 8;
 
 export function PreviewEditorLayout({
   preview,
@@ -23,7 +24,9 @@ export function PreviewEditorLayout({
   const [limits, setLimits] = useState({ min: 40, max: 75 });
 
   function allowedPercent() {
-    const width = (layoutRef.current?.getBoundingClientRect().width ?? 0) - 10;
+    const width =
+      (layoutRef.current?.getBoundingClientRect().width ?? 0) -
+      RESIZE_HANDLE_WIDTH;
     if (width <= 0) return { min: 40, max: 75 };
     const min = Math.max(40, Math.round((360 / width) * 100));
     const max = Math.min(75, Math.round(((width - 320) / width) * 100));
@@ -33,7 +36,7 @@ export function PreviewEditorLayout({
   function setFromPointer(event: PointerEvent<HTMLDivElement>) {
     const rect = layoutRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const availableWidth = rect.width - 10;
+    const availableWidth = rect.width - RESIZE_HANDLE_WIDTH;
     const minimumPreview = Math.min(360, availableWidth / 2);
     const minimumEditor = Math.min(320, availableWidth / 2);
     const requestedWidth = event.clientX - rect.left;

@@ -94,6 +94,38 @@ function assertMetricValue(value: string, valueType: string) {
   }
 }
 
+async function discoverExternalMetrics() {
+  const sources = await prisma.dataSource.findMany({ where: { type: "MYSQL", status: "ACTIVE" } });
+  for (const source of sources) {
+    let records;
+    try {
+      records = await adapterFor(source).listMetricDefinitions();
+    } catch {
+      throw new MetricServiceError("DATASOURCE_UNAVAILABLE", "指标数据源暂时不可用", 503);
+    }
+    const definitions = await prisma.metricDefinition.findMany({ where: { dataSourceId: source.id }, select: { code: true } });
+    const existingCodes = new Set(definitions.map((definition) => definition.code));
+    const discoveredCodes = new Set<string>();
+    for (const record of records) {
+      if (discoveredCodes.has(record.metricCode)) {
+        throw new MetricServiceError("AMBIGUOUS_METRIC_CODE", "数据源内存在重复指标编码，无法自动登记", 409);
+      }
+      discoveredCodes.add(record.metricCode);
+    }
+    const missing = records.filter((record) => !existingCodes.has(record.metricCode));
+    if (missing.length) {
+      await prisma.metricDefinition.createMany({
+        data: missing.map((record) => ({
+          dataSourceId: source.id, code: record.metricCode, name: record.metricName,
+          valueType: record.valueType, unit: record.unit,
+          queryConfigJson: { adapter: "demo_metric_record", sourceCode: record.dataSourceCode }
+        })),
+        skipDuplicates: true
+      });
+    }
+  }
+}
+
 export async function createManualMetric(input: unknown) {
   const actor = await requireCollector();
   const parsed = createManualMetricSchema.parse(input);
@@ -230,6 +262,7 @@ async function reconcileMirror(definition: DefinitionWithSource, period: string,
 }
 
 async function queryAllMetrics(period: string) {
+  await discoverExternalMetrics();
   const definitions = await prisma.metricDefinition.findMany({
     where: { dataSource: { status: "ACTIVE" } },
     include: { dataSource: true },
@@ -259,6 +292,7 @@ async function queryAllMetrics(period: string) {
 }
 
 async function availablePeriods(year: string) {
+  await discoverExternalMetrics();
   const definitions = await prisma.metricDefinition.findMany({
     where: { dataSource: { status: "ACTIVE" } },
     include: { dataSource: true }
@@ -322,6 +356,7 @@ const CATALOG_PAGE_SIZE = 20;
 export async function listMetricCatalog(input: { period: unknown; page: unknown; search: unknown }) {
   await requireCollector();
   const { period, page, search } = metricCatalogQuerySchema.parse(input);
+  await discoverExternalMetrics();
   const where: Prisma.MetricDefinitionWhereInput = {
     dataSource: { status: "ACTIVE" },
     ...(search ? { OR: [
